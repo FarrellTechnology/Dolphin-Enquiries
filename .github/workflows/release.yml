@@ -15,7 +15,7 @@ jobs:
       - name: Install Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: 18
+          node-version: 22
           cache: 'npm'
 
       - name: Install dependencies
@@ -33,8 +33,8 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            dist/*.exe
-            dist/*.blockmap
-            dist/latest.yml
+            out/*.exe
+            out/*.blockmap
+            out/latest.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
