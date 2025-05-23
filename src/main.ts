@@ -194,8 +194,6 @@ function setupAutoUpdater() {
 }
 
 app.whenReady().then(() => {
-  setupAutoUpdater();
-
   dolphinEnquiriesAutoLauncher.isEnabled()
     .then((isEnabled: boolean) => {
       if (!isEnabled) {
@@ -205,6 +203,9 @@ app.whenReady().then(() => {
     .catch((err: any) => {
       console.error('AutoLaunch error:', err);
     });
+
+  // Setup auto-updater after core functionality
+  setupAutoUpdater();
 
   Menu.setApplicationMenu(null);
   createWindow();
