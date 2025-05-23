@@ -1,4 +1,4 @@
-name: Electron CI/CD
+name: Release Electron App
 
 env:
   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -6,55 +6,42 @@ env:
 on:
   push:
     branches:
-      - 'development'
+      - 'master'
 
 jobs:
-  build:
+  release:
     runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.get_version.outputs.version }}
     steps:
       - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
 
       - uses: actions/setup-node@v3
         with:
           node-version: 22
           cache: npm
 
-      - run: npm ci
+      - name: Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: electron-build
+          path: ./out  # place artifact content here
 
-      - run: npm run build
+      - run: npm ci
 
       - name: Get version from package.json
         id: get_version
-        run: echo "::set-output name=version::$(node -p \"require('./package.json').version\")"
-
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/master'   # Only run release on master branch pushes
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
+        run: echo "version=$(node -p \"require('./package.json').version\")" >> $GITHUB_OUTPUT
 
       - name: Tag version
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git tag v${{ needs.build.outputs.version }}
-          git push origin v${{ needs.build.outputs.version }}
-
-      - run: npm ci
-
-      - run: npm run build
+          git tag v${{ steps.get_version.outputs.version }}
+          git push origin v${{ steps.get_version.outputs.version }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: v${{ needs.build.outputs.version }}
+          tag_name: v${{ steps.get_version.outputs.version }}
           files: |
             out/*.exe
             out/*.blockmap
