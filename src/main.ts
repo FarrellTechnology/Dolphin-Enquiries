@@ -3,7 +3,8 @@ dotenv.config();
 
 import { app, Tray, Menu, nativeImage, NativeImage, nativeTheme, BrowserWindow, dialog } from "electron";
 import path from "path";
-import fs from "fs";
+import fs from 'fs/promises';
+import fsSync from 'fs';
 import nodemailer from "nodemailer";
 import { autoUpdater } from "electron-updater";
 
@@ -83,12 +84,12 @@ async function checkFiles(): Promise<void> {
 
   const folderPath: string = path.join(baseFolder, yyyymmdd);
 
-  if (!fs.existsSync(folderPath)) {
+  if (!fsSync.existsSync(folderPath)) {
     console.log(`Folder does not exist: ${folderPath}`);
     return;
   }
 
-  const files: string[] = fs.readdirSync(folderPath);
+  const files: string[] = fsSync.readdirSync(folderPath);
 
   let leisureCount: number = 0;
   let golfCount: number = 0;
@@ -113,30 +114,19 @@ async function checkFiles(): Promise<void> {
     });
   }
 
-  const htmlMessage = `
-  <div style="font-family: Arial, sans-serif; line-height: 1.4;">
-    <h2>Dolphin Enquiries Daily Report</h2>
-    <p>Date: ${formattedDate}</p>
-    <table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; width: 300px;">
-      <thead>
-        <tr>
-          <th style="text-align: left;">Category</th>
-          <th style="text-align: right;">Enquiries Submitted</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td>Leisure</td>
-          <td style="text-align: right;">${leisureCount}</td>
-        </tr>
-        <tr>
-          <td>Golf</td>
-          <td style="text-align: right;">${golfCount}</td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-`;
+  const loadEmailTemplate = async (formattedDate: string, leisureCount: number, golfCount: number): Promise<string> => {
+    const templatePath = resolveAppPath('templates', 'email-template.html');  // Adjust path if needed
+    let template = await fs.readFile(templatePath, 'utf-8');
+
+    template = template.replace('{{formattedDate}}', formattedDate);
+    template = template.replace('{{leisureCount}}', leisureCount.toString());
+    template = template.replace('{{golfCount}}', golfCount.toString());
+
+    return template;
+  };
+
+
+  const htmlMessage = await loadEmailTemplate(formattedDate, leisureCount, golfCount);
 
   try {
     await sendEmail("Dolphin Enquiries Daily Report", undefined, htmlMessage);
