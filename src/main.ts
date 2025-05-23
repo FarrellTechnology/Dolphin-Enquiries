@@ -1,11 +1,11 @@
-
 import * as dotenv from "dotenv";
 dotenv.config();
 
-import { app, Tray, Menu, nativeImage, NativeImage, nativeTheme, BrowserWindow } from "electron";
+import { app, Tray, Menu, nativeImage, NativeImage, nativeTheme, BrowserWindow, dialog } from "electron";
 import path from "path";
 import fs from "fs";
 import nodemailer from "nodemailer";
+import { autoUpdater } from "electron-updater";
 
 const AutoLaunch: any = require('auto-launch');
 const schedule: any = require('node-schedule');
@@ -156,7 +156,46 @@ async function sendEmail(subject: string, text?: string, html?: string): Promise
   console.log("Email sent: %s", info.messageId);
 }
 
+function setupAutoUpdater() {
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.checkForUpdates();
+
+  autoUpdater.on('update-available', (info) => {
+    dialog.showMessageBox({
+      type: 'info',
+      title: 'Update Available',
+      message: `A new version (${info.version}) is available. Would you like to download it now?`,
+      buttons: ['Yes', 'No']
+    }).then((result) => {
+      if (result.response === 0) {
+        autoUpdater.downloadUpdate();
+      }
+    });
+  });
+
+  autoUpdater.on('update-downloaded', () => {
+    dialog.showMessageBox({
+      type: 'info',
+      title: 'Update Ready',
+      message: 'A new version has been downloaded. Restart the application to apply the updates.',
+      buttons: ['Restart', 'Later']
+    }).then((result) => {
+      if (result.response === 0) {
+        autoUpdater.quitAndInstall();
+      }
+    });
+  });
+
+  autoUpdater.on('error', (err) => {
+    dialog.showErrorBox('Update Error', `An error occurred while updating: ${err.message}`);
+  });
+}
+
 app.whenReady().then(() => {
+  setupAutoUpdater();
+
   dolphinEnquiriesAutoLauncher.isEnabled()
     .then((isEnabled: boolean) => {
       if (!isEnabled) {
