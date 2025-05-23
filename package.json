@@ -15,13 +15,20 @@
     "build": {
         "appId": "org.farrelltech.dolphinenquiries",
         "productName": "Dolphin Enquiries",
+        "asar": true,
         "files": [
             "dist/**/*",
             "company-icon.png",
             "company-icon-dark.png",
-            "node_modules/**/*",
             "package.json"
         ],
+        "asarUnpack": [
+            "**/*.node"
+        ],
+        "extraResources": [],
+        "directories": {
+            "output": "dist"
+        },
         "win": {
             "target": "nsis",
             "icon": "company-icon.ico"
