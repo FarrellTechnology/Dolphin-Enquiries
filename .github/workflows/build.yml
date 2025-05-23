@@ -27,7 +27,7 @@ jobs:
 
       - name: Get version from package.json
         id: get_version
-        run: echo "VERSION=v$(node -p \"require('./package.json').version\")" >> $GITHUB_ENV
+        run: echo "VERSION=v$(node -p \"require('./package.json').version\")" >> $env:GITHUB_ENV
 
       - name: Tag version and push
         run: |
