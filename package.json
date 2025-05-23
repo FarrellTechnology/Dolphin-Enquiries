@@ -1,0 +1,43 @@
+{
+    "name": "dolphin-enquiries-tray",
+    "version": "1.0.0",
+    "main": "dist/main.js",
+    "description": "A simple Electron app to send email notifications for Dolphin Enquiries.",
+    "author": {
+        "name": "Farrell Technology LTD",
+        "email": "office@farrelltech.org",
+        "url": "https://farrelltech.org"
+    },
+    "scripts": {
+        "start": "tsc && electron .",
+        "build": "tsc && electron-builder"
+    },
+    "build": {
+        "appId": "org.farrelltech.dolphinenquiries",
+        "productName": "Dolphin Enquiries",
+        "files": [
+            "dist/**/*",
+            "company-icon.png",
+            "company-icon-dark.png",
+            "node_modules/**/*",
+            "package.json"
+        ],
+        "win": {
+            "target": "nsis",
+            "icon": "company-icon.ico"
+        }
+    },
+    "dependencies": {
+        "auto-launch": "^5.0.6",
+        "dotenv": "^16.5.0",
+        "node-schedule": "^2.1.0",
+        "nodemailer": "^7.0.3"
+    },
+    "devDependencies": {
+        "@types/node": "^22.15.21",
+        "@types/nodemailer": "^6.4.17",
+        "electron": "^26.0.0",
+        "electron-builder": "^26.0.12",
+        "typescript": "^5.8.3"
+    }
+}
