@@ -1,6 +1,6 @@
 {
     "name": "dolphin-enquiries-tray",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "main": "dist/main.js",
     "description": "A simple Electron app to send email notifications for Dolphin Enquiries.",
     "author": {
@@ -10,7 +10,7 @@
     },
     "scripts": {
         "start": "tsc && electron .",
-        "build": "tsc && electron-builder"
+        "build": "rimraf out && rimraf dist && tsc && electron-builder"
     },
     "build": {
         "appId": "org.farrelltech.dolphinenquiries",
@@ -18,20 +18,24 @@
         "asar": true,
         "files": [
             "dist/**/*",
-            "company-icon.png",
-            "company-icon-dark.png",
             "package.json"
         ],
+        "extraResources": [
+            {
+                "from": "src/assets",
+                "to": "assets"
+            }
+        ],
         "asarUnpack": [
+            "**/preload.js",
             "**/*.node"
         ],
-        "extraResources": [],
         "directories": {
-            "output": "dist"
+            "output": "out"
         },
         "win": {
             "target": "nsis",
-            "icon": "company-icon.ico"
+            "icon": "src/assets/images/company-icon.ico"
         },
         "publish": {
             "provider": "github",
@@ -39,18 +43,20 @@
             "repo": "Dolphin-Enquiries"
         }
     },
-    "dependencies": {
-        "auto-launch": "^5.0.6",
-        "dotenv": "^16.5.0",
-        "electron-updater": "^6.6.2",
-        "node-schedule": "^2.1.0",
-        "nodemailer": "^7.0.3"
-    },
     "devDependencies": {
+        "@types/dotenv": "^6.1.1",
         "@types/node": "^22.15.21",
         "@types/nodemailer": "^6.4.17",
         "electron": "^26.0.0",
         "electron-builder": "^26.0.12",
+        "rimraf": "^6.0.1",
         "typescript": "^5.8.3"
+    },
+    "dependencies": {
+        "auto-launch": "^5.0.6",
+        "dotenv": "^16.5.0",
+        "electron-updater": "^6.6.2",
+        "node-schedule": "^2.1.1",
+        "nodemailer": "^7.0.3"
     }
 }

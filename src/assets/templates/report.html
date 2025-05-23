@@ -1,0 +1,39 @@
+  <!DOCTYPE html>
+  <html lang="en" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Dolphin Enquiries Report</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-6 font-sans">
+    <h2 class="text-2xl font-bold mb-4">Dolphin Enquiries Daily Report</h2>
+    <p id="date" class="mb-4">Date: ...</p>
+
+    <table class="border border-gray-300 dark:border-gray-600 rounded w-80">
+      <thead>
+        <tr class="bg-gray-200 dark:bg-gray-700">
+          <th class="text-left px-4 py-2">Category</th>
+          <th class="text-right px-4 py-2">Enquiries Submitted</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="border-t border-gray-300 dark:border-gray-600 px-4 py-2">Leisure</td>
+          <td id="leisure-count" class="border-t border-gray-300 dark:border-gray-600 text-right px-4 py-2">...</td>
+        </tr>
+        <tr>
+          <td class="border-t border-gray-300 dark:border-gray-600 px-4 py-2">Golf</td>
+          <td id="golf-count" class="border-t border-gray-300 dark:border-gray-600 text-right px-4 py-2">...</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <script>
+      window.electronAPI.onReportData(({ formattedDate, leisureCount, golfCount }) => {
+        document.getElementById('date').textContent = `Date: ${formattedDate}`;
+        document.getElementById('leisure-count').textContent = leisureCount;
+        document.getElementById('golf-count').textContent = golfCount;
+      });
+    </script>
+  </body>
+  </html>

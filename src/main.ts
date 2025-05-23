@@ -1,4 +1,4 @@
-import * as dotenv from "dotenv";
+import dotenv from 'dotenv';
 dotenv.config();
 
 import { app, Tray, Menu, nativeImage, NativeImage, nativeTheme, BrowserWindow, dialog } from "electron";
@@ -20,27 +20,38 @@ const dolphinEnquiriesAutoLauncher = new AutoLaunch({
 
 let mainWindow: BrowserWindow | null = null;
 
+function resolveAppPath(...segments: string[]) {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, 'assets', ...segments);
+  } else {
+    return path.join(__dirname, '..', 'src', 'assets', ...segments);
+  }
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 400,
     height: 350,
     show: false,
     icon: nativeImage.createFromPath(
-      nativeTheme.shouldUseDarkColors
-        ? path.join(__dirname, "..", "company-icon.png")
-        : path.join(__dirname, "..", "company-icon-dark.png")
+      resolveAppPath('images', nativeTheme.shouldUseDarkColors
+        ? "company-icon.png" : "company-icon-dark.png")
     ),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, "..", 'preload.js')
+      preload: resolveAppPath('js', 'preload.js')
     },
   });
 
-  mainWindow.loadFile(path.join(__dirname, "..", "report.html"));
+  mainWindow.loadFile(resolveAppPath('templates', 'index.html'));
 
   mainWindow.once("ready-to-show", () => {
     mainWindow?.show();
+
+    if (!app.isPackaged) {
+      mainWindow?.webContents.openDevTools({ mode: "detach" });
+    }
   });
 
   mainWindow.on("close", (event) => {
@@ -92,7 +103,7 @@ async function checkFiles(): Promise<void> {
   if (tray) tray.setToolTip(message);
 
   if (mainWindow) {
-    mainWindow.loadFile(path.join(__dirname, "..", "report.html"));
+    mainWindow.loadFile(resolveAppPath('templates', 'report.html'));
     mainWindow.webContents.once('did-finish-load', () => {
       mainWindow?.webContents.send('report-data', {
         formattedDate,
@@ -210,9 +221,7 @@ app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
   createWindow();
 
-  const iconPath: string = nativeTheme.shouldUseDarkColors
-    ? path.join(__dirname, '..', 'company-icon.png')
-    : path.join(__dirname, '..', 'company-icon-dark.png');
+  const iconPath = resolveAppPath('images', nativeTheme.shouldUseDarkColors ? 'company-icon.png' : 'company-icon-dark.png');
   const trayIcon: NativeImage = nativeImage.createFromPath(iconPath);
 
   tray = new Tray(trayIcon);
@@ -227,7 +236,13 @@ app.whenReady().then(() => {
         });
       }
     },
-    { label: "Quit", click: () => app.quit() },
+    {
+      label: "Quit",
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      }
+    }
   ]);
   tray.setContextMenu(contextMenu);
   tray.setToolTip("Dolphin Enquiries");
