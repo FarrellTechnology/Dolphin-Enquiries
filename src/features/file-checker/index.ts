@@ -2,8 +2,8 @@ import path from "path";
 import fs from "fs/promises";
 import fsSync from "fs";
 import { app } from "electron";
-import { resolveAppPath } from "../../utils";
 import { getMainWindow, sendEmail, updateTrayTooltip } from "..";
+import { getTemplate } from "../../utils";
 
 export async function checkFiles(): Promise<void> {
   const documentsFolder = app.getPath("documents");
@@ -27,7 +27,7 @@ export async function checkFiles(): Promise<void> {
   updateTrayTooltip(message);
 
   if (getMainWindow()) {
-    getMainWindow()?.loadFile(resolveAppPath('templates', 'report.html'));
+    getMainWindow()?.loadFile(getTemplate('report.html'));
     getMainWindow()?.webContents.once('did-finish-load', () => {
       getMainWindow()?.webContents.send('report-data', { formattedDate, leisureCount, golfCount });
     });
@@ -38,7 +38,7 @@ export async function checkFiles(): Promise<void> {
 }
 
 async function loadEmailTemplate(date: string, leisure: number, golf: number): Promise<string> {
-  const templatePath = resolveAppPath("templates", "email-template.html");
+  const templatePath = getTemplate("email-template.html");
   let template = await fs.readFile(templatePath, "utf-8");
   return template.replace("{{formattedDate}}", date)
     .replace("{{leisureCount}}", leisure.toString())

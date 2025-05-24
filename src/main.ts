@@ -16,7 +16,7 @@ app.whenReady().then(async () => {
   });
 
   setupScheduler(checkFiles);
-  
+
   if (app.isPackaged) checkFiles();
 });
 

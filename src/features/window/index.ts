@@ -1,15 +1,11 @@
 import { app, BrowserWindow, nativeImage, nativeTheme } from "electron";
-import { resolveAppPath } from "../../utils";
+import { getImage, getJs, getTemplate } from "../../utils";
 
-export let mainWindow: BrowserWindow | null = null;
+let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
 
 export function getMainWindow() {
   return mainWindow;
-}
-
-export function setMainWindow(window: BrowserWindow | null) {
-  mainWindow = window;
 }
 
 export function getIsQuitting() {
@@ -26,15 +22,15 @@ export function createMainWindow() {
     height: 350,
     show: false,
     icon: nativeImage.createFromPath(
-      resolveAppPath("images", nativeTheme.shouldUseDarkColors ? "company-icon.png" : "company-icon-dark.png")
+      getImage(nativeTheme.shouldUseDarkColors ? "company-icon.png" : "company-icon-dark.png")
     ),
     webPreferences: {
       contextIsolation: true,
-      preload: resolveAppPath("js", "preload.js"),
+      preload: getJs("preload.js"),
     },
   });
 
-  mainWindow.loadFile(resolveAppPath("templates", "index.html"));
+  mainWindow.loadFile(getTemplate("index.html"));
 
   mainWindow.once("ready-to-show", () => {
     mainWindow?.show();
