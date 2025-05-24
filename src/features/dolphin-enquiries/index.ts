@@ -6,7 +6,7 @@ import { sendEmail } from "..";
 import { assets } from "../../utils";
 import { getMainWindow, updateTrayTooltip } from "../../window";
 
-export async function checkFiles(): Promise<void> {
+export async function checkDolphinFiles(): Promise<void> {
   const documentsFolder = app.getPath("documents");
   const baseFolder = path.join(documentsFolder, "DolphinEnquiries", "completed");
 
