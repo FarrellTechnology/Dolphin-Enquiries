@@ -1,11 +1,11 @@
 import path from "path";
 import fs from "fs/promises";
 import fsSync from "fs";
-import { app, BrowserWindow } from "electron";
+import { app } from "electron";
 import { resolveAppPath } from "../../utils";
-import { sendEmail, updateTrayTooltip } from "..";
+import { getMainWindow, sendEmail, updateTrayTooltip } from "..";
 
-export async function checkFiles(mainWindow: BrowserWindow | null): Promise<void> {
+export async function checkFiles(): Promise<void> {
   const documentsFolder = app.getPath("documents");
   const baseFolder = path.join(documentsFolder, "DolphinEnquiries", "completed");
 
@@ -26,10 +26,10 @@ export async function checkFiles(mainWindow: BrowserWindow | null): Promise<void
   const message = `[${formattedDate}] Leisure Enquiries: ${leisureCount}, Golf Enquiries: ${golfCount}`;
   updateTrayTooltip(message);
 
-  if (mainWindow) {
-    mainWindow.loadFile(resolveAppPath('templates', 'report.html'));
-    mainWindow.webContents.once('did-finish-load', () => {
-      mainWindow?.webContents.send('report-data', { formattedDate, leisureCount, golfCount });
+  if (getMainWindow()) {
+    getMainWindow()?.loadFile(resolveAppPath('templates', 'report.html'));
+    getMainWindow()?.webContents.once('did-finish-load', () => {
+      getMainWindow()?.webContents.send('report-data', { formattedDate, leisureCount, golfCount });
     });
   }
 
@@ -41,6 +41,6 @@ async function loadEmailTemplate(date: string, leisure: number, golf: number): P
   const templatePath = resolveAppPath("templates", "email-template.html");
   let template = await fs.readFile(templatePath, "utf-8");
   return template.replace("{{formattedDate}}", date)
-                 .replace("{{leisureCount}}", leisure.toString())
-                 .replace("{{golfCount}}", golf.toString());
+    .replace("{{leisureCount}}", leisure.toString())
+    .replace("{{golfCount}}", golf.toString());
 }

@@ -1,16 +1,16 @@
-import { Tray, Menu, nativeImage, nativeTheme, BrowserWindow } from "electron";
+import { Tray, Menu, nativeImage, nativeTheme } from "electron";
 import { resolveAppPath } from "../../utils";
-import { checkFiles } from "..";
+import { checkFiles, getMainWindow } from "..";
 
 let tray: Tray;
 
-export function setupTray(mainWindow: BrowserWindow | null, onQuit: () => void) {
+export function setupTray(onQuit: () => void) {
   const iconPath = resolveAppPath("images", nativeTheme.shouldUseDarkColors ? "company-icon.png" : "company-icon-dark.png");
   tray = new Tray(nativeImage.createFromPath(iconPath));
 
   const contextMenu = Menu.buildFromTemplate([
     { label: "Dolphin Enquiries", enabled: false },
-    { label: "Check Files Now", click: () => checkFiles(mainWindow).catch(console.error) },
+    { label: "Check Files Now", click: () => checkFiles().catch(console.error) },
     { label: "Quit", click: onQuit }
   ]);
 
@@ -18,10 +18,10 @@ export function setupTray(mainWindow: BrowserWindow | null, onQuit: () => void) 
   tray.setContextMenu(contextMenu);
 
   tray.on("click", () => {
-    if (mainWindow?.isVisible()) {
-      mainWindow.focus();
+    if (getMainWindow()?.isVisible()) {
+      getMainWindow()?.focus();
     } else {
-      mainWindow?.show();
+      getMainWindow()?.show();
     }
   });
 }

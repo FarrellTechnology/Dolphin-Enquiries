@@ -2,8 +2,19 @@ import { app, BrowserWindow, nativeImage, nativeTheme } from "electron";
 import { resolveAppPath } from "../../utils";
 
 export let mainWindow: BrowserWindow | null = null;
-
 let isQuitting = false;
+
+export function getMainWindow() {
+  return mainWindow;
+}
+
+export function setMainWindow(window: BrowserWindow | null) {
+  mainWindow = window;
+}
+
+export function getIsQuitting() {
+  return isQuitting;
+}
 
 export function setIsQuitting(value: boolean) {
   isQuitting = value;
@@ -31,7 +42,7 @@ export function createMainWindow() {
   });
 
   mainWindow.on("close", (event) => {
-    if (!isQuitting) {
+    if (!getIsQuitting()) {
       event.preventDefault();
       mainWindow?.hide();
     }
@@ -44,6 +55,4 @@ export function createMainWindow() {
   nativeTheme.on("updated", () => {
     mainWindow?.webContents.send("theme-changed", nativeTheme.shouldUseDarkColors ? "dark" : "light");
   });
-
-  return mainWindow;
 }
