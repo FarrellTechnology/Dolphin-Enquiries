@@ -2,8 +2,9 @@ import path from "path";
 import fs from "fs/promises";
 import fsSync from "fs";
 import { app } from "electron";
-import { getMainWindow, sendEmail, updateTrayTooltip } from "..";
+import { sendEmail } from "..";
 import { assets } from "../../utils";
+import { getMainWindow, updateTrayTooltip } from "../../window";
 
 export async function checkFiles(): Promise<void> {
   const documentsFolder = app.getPath("documents");
