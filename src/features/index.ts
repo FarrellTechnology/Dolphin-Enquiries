@@ -1,5 +1,5 @@
 export * from "./auto-launch";
-export * from "./file-checker";
+export * from "./dolphin-enquiries";
 export * from "./mailer";
 export * from "./scheduler";
 export * from "./updater";

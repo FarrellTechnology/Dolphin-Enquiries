@@ -1,5 +1,5 @@
 import { Tray, Menu, nativeImage, nativeTheme } from "electron";
-import { checkFiles } from "../../features";
+import { checkDolphinFiles } from "../../features";
 import { assets } from "../../utils";
 import { getMainWindow } from "..";
 
@@ -11,7 +11,7 @@ export function setupTray(onQuit: () => void) {
 
   const contextMenu = Menu.buildFromTemplate([
     { label: "Dolphin Enquiries", enabled: false },
-    { label: "Check Files Now", click: () => checkFiles().catch(console.error) },
+    { label: "Check Files Now", click: () => checkDolphinFiles().catch(console.error) },
     { label: "Quit", click: onQuit }
   ]);
 
