@@ -35,7 +35,8 @@
         },
         "win": {
             "target": "nsis",
-            "icon": "src/assets/images/company-icon.ico"
+            "icon": "src/assets/images/company-icon.ico",
+            "artifactName": "Dolphin.Enquiries.Setup.${version}.${ext}"
         },
         "publish": {
             "provider": "github",
