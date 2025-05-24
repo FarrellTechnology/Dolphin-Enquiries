@@ -1,6 +1,7 @@
 import { Tray, Menu, nativeImage, nativeTheme } from "electron";
-import { checkFiles, getMainWindow } from "..";
+import { checkFiles } from "../../features";
 import { assets } from "../../utils";
+import { getMainWindow } from "..";
 
 let tray: Tray;
 
