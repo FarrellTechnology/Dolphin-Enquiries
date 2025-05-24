@@ -1,11 +1,11 @@
 import { Tray, Menu, nativeImage, nativeTheme } from "electron";
 import { checkFiles, getMainWindow } from "..";
-import { getImage } from "../../utils";
+import { assets } from "../../utils";
 
 let tray: Tray;
 
 export function setupTray(onQuit: () => void) {
-  const iconPath = getImage(nativeTheme.shouldUseDarkColors ? "company-icon.png" : "company-icon-dark.png");
+  const iconPath = assets.image(nativeTheme.shouldUseDarkColors ? "company-icon.png" : "company-icon-dark.png");
   tray = new Tray(nativeImage.createFromPath(iconPath));
 
   const contextMenu = Menu.buildFromTemplate([
