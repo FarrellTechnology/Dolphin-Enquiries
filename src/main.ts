@@ -9,16 +9,17 @@ app.whenReady().then(async () => {
   setupAutoUpdater();
   Menu.setApplicationMenu(null);
 
-  const mainWindow = createMainWindow();
-  setupTray(mainWindow, () => {
+  createMainWindow();
+  setupTray(() => {
     setIsQuitting(true);
     app.quit();
   });
 
-  setupScheduler(mainWindow, checkFiles);
-  checkFiles(mainWindow);
+  setupScheduler(checkFiles);
+
+  if (app.isPackaged) checkFiles();
 });
 
 app.on("window-all-closed", (e: { preventDefault: () => void; }) => {
-  e.preventDefault(); // Prevent app from quitting
+  e.preventDefault();
 });
