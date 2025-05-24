@@ -8,57 +8,46 @@ on:
       - 'v*.*.*'
 
 jobs:
-  build:
-    name: Build
+  release:
     runs-on: windows-latest
-    outputs:
-      version: ${{ steps.get_version.outputs.version }}
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-      - name: Setup Node.js v22
-        uses: actions/setup-node@v3
+      - uses: actions/setup-node@v3
         with:
           node-version: 22
 
-      - name: Install Dependencies
-        run: npm ci
+      - run: npm ci
 
-      - name: Build Electron App
+      - name: Build and Publish Electron App
         run: npm run build
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
-  release:
-    name: Release
-    runs-on: windows-latest
-    needs: build
-    steps:
-      - name: Get Version from package.json
+      - name: Get version from package.json
         id: get_version
         shell: pwsh
         run: |
           $version = node -p "require('./package.json').version"
           echo "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          
+
       - name: Create GitHub Release
         id: create_release
         uses: actions/create-release@v1
         with:
-          tag_name: v${{ needs.build.outputs.version }}
-          release_name: Release v${{ needs.build.outputs.version }}
+          tag_name: v${{ steps.get_version.outputs.version }}
+          release_name: Release v${{ steps.get_version.outputs.version }}
           draft: false
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload Release Asset
+      - name: Upload release asset
         uses: actions/upload-release-asset@v1
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: "./out/Dolphin Enquiries Setup ${{ needs.build.outputs.version }}.exe"
-          asset_name: "Dolphin Enquiries Setup ${{ needs.build.outputs.version }}.exe"
+          asset_path: "./out/Dolphin Enquiries Setup ${{ steps.get_version.outputs.version }}.exe"
+          asset_name: "Dolphin Enquiries Setup ${{ steps.get_version.outputs.version }}.exe"
           asset_content_type: application/octet-stream
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
