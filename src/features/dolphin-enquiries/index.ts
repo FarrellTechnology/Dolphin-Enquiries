@@ -1,14 +1,12 @@
 import path from "path";
 import fs from "fs/promises";
 import fsSync from "fs";
-import { app } from "electron";
 import { sendEmail } from "..";
-import { assets } from "../../utils";
+import { assets, documentsFolder } from "../../utils";
 import { getMainWindow, updateTrayTooltip } from "../../window";
 
 export async function checkDolphinFiles(): Promise<void> {
-  const documentsFolder = app.getPath("documents");
-  const baseFolder = path.join(documentsFolder, "DolphinEnquiries", "completed");
+  const baseFolder = path.join(documentsFolder(), "DolphinEnquiries", "completed");
 
   const yesterday = new Date(Date.now() - 86400000);
   const formattedDate = yesterday.toLocaleDateString("en-GB").replace(/\//g, "-");

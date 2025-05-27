@@ -1,16 +1,13 @@
 import Client from 'ssh2-sftp-client';
 import fs from 'fs';
 import path from 'path';
-import { app } from 'electron';
-import { settings } from '../../utils';
+import { documentsFolder, settings } from '../../utils';
 
 const sftp1 = new Client();
 const sftp2 = new Client();
 
-const documentsFolder = app.getPath("documents");
-
 function logFileMovement(fileName: string, destinationFolder: string, timeTaken: number) {
-    const logDir = path.join(documentsFolder, "DolphinEnquiries", "logs");
+    const logDir = path.join(documentsFolder(), "DolphinEnquiries", "logs");
     const logFile = path.join(logDir, `${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.txt`);
 
     if (!fs.existsSync(logDir)) {
@@ -54,7 +51,7 @@ export async function watchAndTransferFiles(pollIntervalMs = 5000) {
 
     const remotePath = sftpOneConfig.remotePath || '';
     const uploadPath = sftpTwoConfig.uploadPath || '';
-    const localPath = path.join(documentsFolder, "DolphinEnquiries", "completed");
+    const localPath = path.join(documentsFolder(), "DolphinEnquiries", "completed");
 
     const transferredFiles = new Set<string>();
 
