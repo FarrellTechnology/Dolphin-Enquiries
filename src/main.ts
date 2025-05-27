@@ -17,8 +17,7 @@ app.whenReady().then(async () => {
     app.quit();
   });
 
-  setupScheduler(checkDolphinFiles);
-  setupScheduler(transferFiles);
+  setupScheduler(checkDolphinFiles, transferFiles);
 
   if (app.isPackaged) checkDolphinFiles();
 });
