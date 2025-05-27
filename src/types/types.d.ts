@@ -1,4 +1,4 @@
-interface SFTPConfig {
+type SFTPConfig = {
     host: string;
     port: number;
     username: string;
@@ -7,7 +7,7 @@ interface SFTPConfig {
     uploadPath?: string;
 }
 
-interface SMTPConfig {
+type SMTPConfig = {
     host: string;
     port: number;
     secure: boolean;
@@ -16,8 +16,14 @@ interface SMTPConfig {
     to: string;
 }
 
-interface StoreSchema {
+type StoreSchema = {
     smtp: SMTPConfig;
     sftpOne: SFTPConfig;
     sftpTwo: SFTPConfig;
 }
+
+
+type ScheduledTask = {
+    task: () => void;
+    schedule?: string; // optional, default to 1:00 AM
+};

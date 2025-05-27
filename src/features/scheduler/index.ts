@@ -1,13 +1,13 @@
-import schedule from "node-schedule";
+import schedule from 'node-schedule';
 
 const scheduledJobs: schedule.Job[] = [];
 
-export function setupScheduler(...tasks: Array<() => void>) {
+export function setupScheduler(...tasks: ScheduledTask[]) {
   scheduledJobs.forEach(job => job.cancel());
   scheduledJobs.length = 0;
 
-  for (const task of tasks) {
-    const job = schedule.scheduleJob("0 1 * * *", () => {
+  for (const { task, schedule: cronTime = '0 1 * * *' } of tasks) {
+    const job = schedule.scheduleJob(cronTime, () => {
       try {
         void task();
       } catch (e) {

@@ -17,7 +17,10 @@ app.whenReady().then(async () => {
     app.quit();
   });
 
-  setupScheduler(checkDolphinFiles, transferFiles);
+  setupScheduler(
+    { task: checkDolphinFiles },
+    { task: transferFiles, schedule: '15 1 * * *' }  // runs at 1:15 AM
+  );
 
   if (app.isPackaged) checkDolphinFiles();
 });
