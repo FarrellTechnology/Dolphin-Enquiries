@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SMTP Settings - Dolphin Enquiries</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+    }
+  </script>
+</head>
+
+<body class="bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-100 p-6">
+  <div class="max-w-md mx-auto">
+    <h1 class="text-2xl font-bold mb-6">SMTP Settings</h1>
+
+    <form id="smtpForm" class="space-y-4">
+      <div>
+        <label for="host" class="block text-sm font-medium mb-1">SMTP Host</label>
+        <input type="text" id="host" name="host" required
+          class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700">
+      </div>
+
+      <div>
+        <label for="port" class="block text-sm font-medium mb-1">Port</label>
+        <input type="number" id="port" name="port" required
+          class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700">
+      </div>
+
+      <div class="flex items-center">
+        <input type="checkbox" id="secure" name="secure"
+          class="h-4 w-4 text-blue-600 rounded border-gray-300 dark:border-gray-700">
+        <label for="secure" class="ml-2 text-sm">Use SSL/TLS</label>
+      </div>
+
+      <div>
+        <label for="user" class="block text-sm font-medium mb-1">Username</label>
+        <input type="text" id="user" name="user" required
+          class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700">
+      </div>
+
+      <div>
+        <label for="pass" class="block text-sm font-medium mb-1">Password</label>
+        <input type="password" id="pass" name="pass" required
+          class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700">
+      </div>
+
+      <div>
+        <label for="to" class="block text-sm font-medium mb-1">Recipient Email</label>
+        <input type="email" id="to" name="to" required
+          class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700">
+      </div>
+
+      <div class="pt-4">
+        <button type="submit"
+          class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors">
+          Save Settings
+        </button>
+      </div>
+    </form>
+
+    <div id="status" class="mt-4 text-sm text-center hidden"></div>
+  </div>
+
+  <script>
+    // Listen for theme changes
+    window.electronAPI?.onThemeChanged?.((theme) => {
+      document.documentElement.classList.toggle('dark', theme === 'dark');
+    });
+
+    // Load initial config
+    window.electronAPI?.getSMTPConfig?.().then((config) => {
+      if (config) {
+        document.getElementById('host').value = config.host;
+        document.getElementById('port').value = config.port;
+        document.getElementById('secure').checked = config.secure;
+        document.getElementById('user').value = config.user;
+        document.getElementById('pass').value = config.pass;
+        document.getElementById('to').value = config.to;
+      }
+    });
+
+    // Handle form submission
+    document.getElementById('smtpForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const status = document.getElementById('status');
+      status.textContent = 'Saving...';
+      status.classList.remove('hidden', 'text-red-600', 'text-green-600');
+      status.classList.add('text-gray-600');
+
+      try {
+        const config = {
+          host: document.getElementById('host').value,
+          port: parseInt(document.getElementById('port').value),
+          secure: document.getElementById('secure').checked,
+          user: document.getElementById('user').value,
+          pass: document.getElementById('pass').value,
+          to: document.getElementById('to').value
+        };
+
+        const result = await window.electronAPI?.saveSMTPConfig?.(config);
+
+        if (!result) {
+          throw new Error('Failed to save settings: No response from backend');
+        }
+
+        if (result.success) {
+          let secondsLeft = 5;
+          status.textContent = `Settings saved successfully! Closing in ${secondsLeft} seconds...`;
+          status.classList.remove('text-gray-600', 'text-red-600');
+          status.classList.add('text-green-600');
+
+          const countdownInterval = setInterval(() => {
+            secondsLeft--;
+            if (secondsLeft > 0) {
+              status.textContent = `Settings saved successfully! Closing in ${secondsLeft} second${secondsLeft === 1 ? '' : 's'}...`;
+            } else {
+              clearInterval(countdownInterval);
+              window.close();
+            }
+          }, 1000);
+        } else {
+          throw new Error(result.error || 'Unknown error occurred');
+        }
+      } catch (error) {
+        status.textContent = `Error: ${error.message}`;
+        status.classList.remove('text-gray-600', 'text-green-600');
+        status.classList.add('text-red-600');
+      }
+
+      status.classList.remove('hidden');
+      setTimeout(() => status.classList.add('hidden'), 5000);
+    });
+  </script>
+</body>
+
+</html>
