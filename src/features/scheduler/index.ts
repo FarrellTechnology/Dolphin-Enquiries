@@ -3,7 +3,6 @@ import schedule from "node-schedule";
 const scheduledJobs: schedule.Job[] = [];
 
 export function setupScheduler(...tasks: Array<() => void>) {
-  // Cancel any existing jobs
   scheduledJobs.forEach(job => job.cancel());
   scheduledJobs.length = 0;
 
