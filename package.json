@@ -1,6 +1,6 @@
 {
     "name": "dolphin-enquiries-tray",
-    "version": "1.0.5",
+    "version": "1.0.6",
     "main": "dist/main.js",
     "description": "A simple Electron app to send email notifications for Dolphin Enquiries.",
     "author": {
@@ -62,6 +62,7 @@
         "dotenv": "^16.5.0",
         "electron-store": "^8.2.0",
         "electron-updater": "^6.6.2",
+        "keytar": "^7.9.0",
         "node-schedule": "^2.1.1",
         "nodemailer": "^7.0.3"
     }

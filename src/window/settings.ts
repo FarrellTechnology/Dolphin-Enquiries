@@ -5,7 +5,7 @@ import { nativeTheme } from 'electron';
 
 let settingsWindow: BrowserWindow | null = null;
 
-export function createSettingsWindow() {
+export async function createSettingsWindow() {
   if (settingsWindow) {
     settingsWindow.focus();
     return;
@@ -33,8 +33,7 @@ export function createSettingsWindow() {
     settingsWindow = null;
   });
 
-  // Send initial SMTP config to renderer
-  const config = settings.getSMTPConfig();
+  const config = await settings.getSMTPConfig();
   settingsWindow.webContents.on('did-finish-load', () => {
     settingsWindow?.webContents.send('smtp-config', config);
     settingsWindow?.webContents.send('theme-changed', nativeTheme.shouldUseDarkColors ? 'dark' : 'light');
@@ -45,7 +44,6 @@ export function createSettingsWindow() {
   });
 }
 
-// IPC handlers for settings window
 export function setupSettingsHandlers(ipcMain: Electron.IpcMain) {
   ipcMain.handle('save-smtp-config', async (_, config) => {
     try {
@@ -58,7 +56,7 @@ export function setupSettingsHandlers(ipcMain: Electron.IpcMain) {
     }
   });
 
-  ipcMain.handle('get-smtp-config', () => {
-    return settings.getSMTPConfig();
+  ipcMain.handle('get-smtp-config', async () => {
+    return await settings.getSMTPConfig();
   });
 } 
