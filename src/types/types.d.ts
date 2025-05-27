@@ -3,8 +3,8 @@ type SFTPConfig = {
     port: number;
     username: string;
     password: string;
-    remotePath?: string;
-    uploadPath?: string;
+    remotePath?: string; // optional, but required for SFTP One
+    uploadPath?: string; // optional, but required for SFTP Two
 }
 
 type SMTPConfig = {
