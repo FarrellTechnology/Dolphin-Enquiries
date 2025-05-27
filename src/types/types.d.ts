@@ -22,7 +22,6 @@ type StoreSchema = {
     sftpTwo: SFTPConfig;
 }
 
-
 type ScheduledTask = {
     task: () => void;
     schedule?: string; // optional, default to 1:00 AM
