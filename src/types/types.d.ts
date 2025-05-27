@@ -3,6 +3,8 @@ interface SFTPConfig {
     port: number;
     username: string;
     password: string;
+    remotePath?: string;
+    uploadPath?: string;
 }
 
 interface SMTPConfig {

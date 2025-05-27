@@ -25,12 +25,30 @@ function logFileMovement(fileName: string, destinationFolder: string, timeTaken:
 
 async function transferFiles() {
     try {
-        const sftpOneConfig = await settings.getSFTPConfigOne();
-        const sftpTwoConfig = await settings.getSFTPConfigTwo();
+        const [sftpOneConfig, sftpTwoConfig] = await Promise.all([
+            settings.getSFTPConfigOne(),
+            settings.getSFTPConfigTwo()
+        ]);
 
         if (!sftpOneConfig || !sftpTwoConfig) {
             throw new Error('SFTP configuration is missing.');
         }
+
+        const requiredFields: (keyof SFTPConfig)[] = ['host', 'port', 'username', 'password'];
+
+        const configs: [string, SFTPConfig][] = [
+            ['SFTP One', sftpOneConfig],
+            ['SFTP Two', sftpTwoConfig],
+        ];
+
+        for (const [name, config] of configs) {
+            for (const field of requiredFields) {
+                if (!config[field]) {
+                    throw new Error(`${name} configuration is missing "${field}".`);
+                }
+            }
+        }
+
         await sftp1.connect({
             host: sftpOneConfig.host,
             port: sftpOneConfig.port,
@@ -45,7 +63,8 @@ async function transferFiles() {
             password: sftpTwoConfig.password,
         });
 
-        const remotePath = '/www/luxuryworldwidecollection_348/public/shared/uploads/dolphin/';
+        const remotePath = sftpOneConfig.remotePath || '';
+        const uploadPath = sftpTwoConfig.uploadPath || '';
         const localPath = path.join(documentsFolder, "DolphinEnquiries", "completed");
 
         const fileList = await sftp1.list(remotePath);
@@ -54,7 +73,7 @@ async function transferFiles() {
             if (file.type === '-') {
                 const remoteFile = `${remotePath}${file.name}`;
                 const localFile = path.join(localPath, file.name);
-                const destRemoteFile = `/XML-LWC/${file.name}`;
+                const destRemoteFile = `${uploadPath}${file.name}`;
 
                 const startTime = Date.now();
 
@@ -68,13 +87,17 @@ async function transferFiles() {
                 console.log(`Uploaded ${file.name} to destination`);
 
                 logFileMovement(file.name, destRemoteFile, Date.now() - startTime);
+                console.log(`Moved ${file.name} to ${destRemoteFile}`);
             }
         }
+
+        console.log('File transfer completed successfully.');
 
         await sftp1.end();
         await sftp2.end();
     } catch (err) {
-        console.error('SFTP error:', err);
+        console.error('Error during file transfer:', err);
+        throw new Error(`File transfer failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
 }
 

@@ -32,13 +32,15 @@ class Settings {
             host: '',
             port: 22,
             username: '',
-            password: ''
+            password: '',
+            remotePath: '',
           },
           sftpTwo: {
             host: '',
             port: 22,
             username: '',
-            password: ''
+            password: '',
+            uploadPath: '',
           }
         }
       });
@@ -64,16 +66,19 @@ class Settings {
 
   async setSMTPConfig(config: SMTPConfig): Promise<void> {
     await this.initStore();
+    console.log('Setting SMTP config:', config);
     this.store!.set('smtp', config);
   }
 
   async setSFTPConfigOne(config: SFTPConfig): Promise<void> {
     await this.initStore();
+    console.log('Setting SFTP One config:', config);
     this.store!.set('sftpOne', config);
   }
 
   async setSFTPConfigTwo(config: SFTPConfig): Promise<void> {
     await this.initStore();
+    console.log('Setting SFTP Two config:', config);
     this.store!.set('sftpTwo', config);
   }
 

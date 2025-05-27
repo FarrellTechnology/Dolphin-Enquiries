@@ -107,6 +107,11 @@
           <input type="password" id="sftp1Pass" name="sftp1Pass" required
             class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
         </div>
+        <div>
+          <label for="sftp1RemotePath" class="block text-sm font-medium mb-1">Remote Path</label>
+          <input type="text" id="sftp1RemotePath" name="sftp1RemotePath" required
+            class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
+        </div>
         <div class="pt-4">
           <button type="submit"
             class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors">
@@ -136,6 +141,11 @@
         <div>
           <label for="sftp2Pass" class="block text-sm font-medium mb-1">Password</label>
           <input type="password" id="sftp2Pass" name="sftp2Pass" required
+            class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
+        </div>
+        <div>
+          <label for="sftp2UploadPath" class="block text-sm font-medium mb-1">Upload Path</label>
+          <input type="text" id="sftp2UploadPath" name="sftp2UploadPath" required
             class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
         </div>
         <div class="pt-4">
@@ -170,7 +180,6 @@
       });
     });
 
-    tabs[0].click();
 
     async function loadSettings() {
       const smtpConfig = await window.electronAPI?.getSMTPConfig?.();
@@ -188,6 +197,7 @@
         document.getElementById('sftp1Port').value = sftp1Config.port;
         document.getElementById('sftp1User').value = sftp1Config.user;
         document.getElementById('sftp1Pass').value = sftp1Config.pass;
+        document.getElementById('sftp1RemotePath').value = sftp1Config.remotePath;
       }
 
       const sftp2Config = await window.electronAPI?.getSFTP2Config?.();
@@ -196,10 +206,14 @@
         document.getElementById('sftp2Port').value = sftp2Config.port;
         document.getElementById('sftp2User').value = sftp2Config.user;
         document.getElementById('sftp2Pass').value = sftp2Config.pass;
+        document.getElementById('sftp2UploadPath').value = sftp2Config.uploadPath;
       }
     }
-    
-    loadSettings();
+
+    window.addEventListener('DOMContentLoaded', () => {
+      tabs[0].click();
+      loadSettings();
+    });
 
     document.getElementById('smtpForm').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -250,6 +264,7 @@
           port: parseInt(document.getElementById('sftp1Port').value),
           user: document.getElementById('sftp1User').value,
           pass: document.getElementById('sftp1Pass').value,
+          remotePath: document.getElementById('sftp1RemotePath').value,
         };
         const result = await window.electronAPI?.saveSFTP1Config?.(config);
 
@@ -284,6 +299,7 @@
           port: parseInt(document.getElementById('sftp2Port').value),
           user: document.getElementById('sftp2User').value,
           pass: document.getElementById('sftp2Pass').value,
+          uploadPath: document.getElementById('sftp2UploadPath').value,
         };
         const result = await window.electronAPI?.saveSFTP2Config?.(config);
 
