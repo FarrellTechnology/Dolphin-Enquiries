@@ -12,8 +12,9 @@ export async function createSettingsWindow() {
 
   settingsWindow = new BrowserWindow({
     width: 500,
-    height: 600,
+    height: 750,
     show: false,
+    resizable: false,
     icon: assets.image(nativeTheme.shouldUseDarkColors ? "company-icon.png" : "company-icon-dark.png"),
     webPreferences: {
       contextIsolation: true,

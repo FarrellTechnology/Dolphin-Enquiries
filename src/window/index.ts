@@ -24,6 +24,7 @@ export function createMainWindow() {
     width: 400,
     height: 350,
     show: false,
+    resizable: false,
     icon: nativeImage.createFromPath(
       assets.image(nativeTheme.shouldUseDarkColors ? "company-icon.png" : "company-icon-dark.png")
     ),
