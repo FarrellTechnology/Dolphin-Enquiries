@@ -1,6 +1,5 @@
-import { BrowserWindow, dialog, app } from 'electron';
+import { BrowserWindow, dialog, app, nativeImage, nativeTheme } from 'electron';
 import { assets, settings } from '../utils';
-import { nativeTheme } from 'electron';
 
 let settingsWindow: BrowserWindow | null = null;
 
@@ -15,7 +14,9 @@ export async function createSettingsWindow() {
     height: 750,
     show: false,
     resizable: false,
-    icon: assets.image(nativeTheme.shouldUseDarkColors ? "company-icon.png" : "company-icon-dark.png"),
+    icon: nativeImage.createFromPath(
+      assets.image(nativeTheme.shouldUseDarkColors ? "company-icon.png" : "company-icon-dark.png")
+    ),
     webPreferences: {
       contextIsolation: true,
       preload: assets.js('preload.js'),
