@@ -1,6 +1,8 @@
 import path from "path";
 import { app } from "electron";
 
+export * from "./settings";
+
 function resolveAppPath(...segments: string[]): string {
   return app.isPackaged
     ? path.join(process.resourcesPath, "assets", ...segments)

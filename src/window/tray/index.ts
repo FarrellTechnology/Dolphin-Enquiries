@@ -14,7 +14,7 @@ export function setupTray(onQuit: () => void) {
     { label: "Dolphin Enquiries", enabled: false },
     { label: "Check Files Now", click: () => checkDolphinFiles().catch(console.error) },
     { type: "separator" },
-    { label: "SMTP Settings", click: () => createSettingsWindow() },
+    { label: "Settings", click: () => createSettingsWindow() },
     { type: "separator" },
     { label: "Quit", click: onQuit }
   ]);

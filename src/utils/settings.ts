@@ -5,6 +5,13 @@ import crypto from 'crypto';
 const SERVICE_NAME = 'dolphin-enquiries-tray';
 const ACCOUNT_NAME = 'encryption-key';
 
+interface SFTPConfig {
+  host: string;
+  port: number;
+  username: string;
+  password: string;
+}
+
 interface SMTPConfig {
   host: string;
   port: number;
@@ -16,6 +23,8 @@ interface SMTPConfig {
 
 interface StoreSchema {
   smtp: SMTPConfig;
+  sftpOne: SFTPConfig;
+  sftpTwo: SFTPConfig;
 }
 
 class Settings {
@@ -40,6 +49,18 @@ class Settings {
             user: '',
             pass: '',
             to: ''
+          },
+          sftpOne: {
+            host: '',
+            port: 22,
+            username: '',
+            password: ''
+          },
+          sftpTwo: {
+            host: '',
+            port: 22,
+            username: '',
+            password: ''
           }
         }
       });
@@ -52,14 +73,47 @@ class Settings {
     return config && config.host ? config : null;
   }
 
+  async getSFTPConfigOne(): Promise<SFTPConfig | null> {
+    await this.initStore();
+    const config = this.store!.get('sftpOne');
+    return config && config.host ? config : null;
+  }
+  async getSFTPConfigTwo(): Promise<SFTPConfig | null> {
+    await this.initStore();
+    const config = this.store!.get('sftpTwo');
+    return config && config.host ? config : null;
+  }
+
   async setSMTPConfig(config: SMTPConfig): Promise<void> {
     await this.initStore();
     this.store!.set('smtp', config);
   }
 
+  async setSFTPConfigOne(config: SFTPConfig): Promise<void> {
+    await this.initStore();
+    this.store!.set('sftpOne', config);
+  }
+
+  async setSFTPConfigTwo(config: SFTPConfig): Promise<void> {
+    await this.initStore();
+    this.store!.set('sftpTwo', config);
+  }
+
   async hasSMTPConfig(): Promise<boolean> {
     await this.initStore();
     const config = this.store!.get('smtp');
+    return Boolean(config?.host);
+  }
+
+  async hasSFTPConfigOne(): Promise<boolean> {
+    await this.initStore();
+    const config = this.store!.get('sftpOne');
+    return Boolean(config?.host);
+  }
+
+  async hasSFTPConfigTwo(): Promise<boolean> {
+    await this.initStore();
+    const config = this.store!.get('sftpTwo');
     return Boolean(config?.host);
   }
 }

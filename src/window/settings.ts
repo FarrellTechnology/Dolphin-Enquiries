@@ -1,6 +1,5 @@
 import { BrowserWindow, dialog, app } from 'electron';
-import { assets } from '../utils';
-import { settings } from '../utils/settings';
+import { assets, settings } from '../utils';
 import { nativeTheme } from 'electron';
 
 let settingsWindow: BrowserWindow | null = null;
@@ -45,9 +44,13 @@ export async function createSettingsWindow() {
 }
 
 export function setupSettingsHandlers(ipcMain: Electron.IpcMain) {
+  ipcMain.handle('get-smtp-config', async () => {
+    return await settings.getSMTPConfig();
+  });
+
   ipcMain.handle('save-smtp-config', async (_, config) => {
     try {
-      settings.setSMTPConfig(config);
+      await settings.setSMTPConfig(config);
       return { success: true };
     } catch (err: unknown) {
       const error = err as Error;
@@ -56,7 +59,33 @@ export function setupSettingsHandlers(ipcMain: Electron.IpcMain) {
     }
   });
 
-  ipcMain.handle('get-smtp-config', async () => {
-    return await settings.getSMTPConfig();
+  ipcMain.handle('get-sftp1-config', async () => {
+    return await settings.getSFTPConfigOne();
   });
-} 
+
+  ipcMain.handle('save-sftp1-config', async (_, config) => {
+    try {
+      await settings.setSFTPConfigOne(config);
+      return { success: true };
+    } catch (err: unknown) {
+      const error = err as Error;
+      dialog.showErrorBox('Error', 'Failed to save SFTP One settings');
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('get-sftp2-config', async () => {
+    return await settings.getSFTPConfigTwo();
+  });
+
+  ipcMain.handle('save-sftp2-config', async (_, config) => {
+    try {
+      await settings.setSFTPConfigTwo(config);
+      return { success: true };
+    } catch (err: unknown) {
+      const error = err as Error;
+      dialog.showErrorBox('Error', 'Failed to save SFTP Two settings');
+      return { success: false, error: error.message };
+    }
+  });
+}

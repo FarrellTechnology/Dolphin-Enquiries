@@ -2,7 +2,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 import { app, Menu, ipcMain } from "electron";
-import { enableAutoLaunch, setupAutoUpdater, setupScheduler, checkDolphinFiles, } from "./features";
+import { enableAutoLaunch, setupAutoUpdater, setupScheduler, checkDolphinFiles, transferFiles } from "./features";
 import { createMainWindow, setIsQuitting, setupTray } from "./window";
 import { setupSettingsHandlers } from "./window/settings";
 
@@ -19,6 +19,7 @@ app.whenReady().then(async () => {
   });
 
   setupScheduler(checkDolphinFiles);
+  setupScheduler(transferFiles);
 
   if (app.isPackaged) checkDolphinFiles();
 });

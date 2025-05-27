@@ -2,6 +2,7 @@ import { app, BrowserWindow, nativeImage, nativeTheme } from "electron";
 import { assets } from "../utils";
 
 export * from "./tray";
+export * from "./settings";
 
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
