@@ -5,28 +5,6 @@ import crypto from 'crypto';
 const SERVICE_NAME = 'dolphin-enquiries-tray';
 const ACCOUNT_NAME = 'encryption-key';
 
-interface SFTPConfig {
-  host: string;
-  port: number;
-  username: string;
-  password: string;
-}
-
-interface SMTPConfig {
-  host: string;
-  port: number;
-  secure: boolean;
-  user: string;
-  pass: string;
-  to: string;
-}
-
-interface StoreSchema {
-  smtp: SMTPConfig;
-  sftpOne: SFTPConfig;
-  sftpTwo: SFTPConfig;
-}
-
 class Settings {
   private store?: Store<StoreSchema>;
 

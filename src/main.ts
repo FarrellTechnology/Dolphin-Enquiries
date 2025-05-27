@@ -3,8 +3,7 @@ dotenv.config();
 
 import { app, Menu, ipcMain } from "electron";
 import { enableAutoLaunch, setupAutoUpdater, setupScheduler, checkDolphinFiles, transferFiles } from "./features";
-import { createMainWindow, setIsQuitting, setupTray } from "./window";
-import { setupSettingsHandlers } from "./window/settings";
+import { createMainWindow, setIsQuitting, setupSettingsHandlers, setupTray } from "./window";
 
 app.whenReady().then(async () => {
   await enableAutoLaunch();
