@@ -24,7 +24,6 @@
   </div>
 
   <script>
-    // Listen for theme changes from Electron
     window.electronAPI?.onThemeChanged?.((theme) => {
       document.documentElement.classList.toggle('dark', theme === 'dark');
     });

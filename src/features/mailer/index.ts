@@ -2,7 +2,7 @@ import nodemailer from "nodemailer";
 import { settings } from "../../utils/settings";
 
 export async function sendEmail(subject: string, text?: string, html?: string): Promise<void> {
-  const config = settings.getSMTPConfig();
+  const config = await settings.getSMTPConfig();
   if (!config) {
     throw new Error('SMTP settings not configured. Please set up your email settings in the tray menu.');
   }

@@ -66,12 +66,10 @@
   </div>
 
   <script>
-    // Listen for theme changes
     window.electronAPI?.onThemeChanged?.((theme) => {
       document.documentElement.classList.toggle('dark', theme === 'dark');
     });
 
-    // Load initial config
     window.electronAPI?.getSMTPConfig?.().then((config) => {
       if (config) {
         document.getElementById('host').value = config.host;
@@ -83,7 +81,6 @@
       }
     });
 
-    // Handle form submission
     document.getElementById('smtpForm').addEventListener('submit', async (e) => {
       e.preventDefault();
 
