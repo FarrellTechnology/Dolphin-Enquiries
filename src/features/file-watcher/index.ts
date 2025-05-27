@@ -23,82 +23,79 @@ function logFileMovement(fileName: string, destinationFolder: string, timeTaken:
     });
 }
 
-async function transferFiles() {
-    try {
-        const [sftpOneConfig, sftpTwoConfig] = await Promise.all([
-            settings.getSFTPConfigOne(),
-            settings.getSFTPConfigTwo()
-        ]);
+let isTransferring = false;
 
-        if (!sftpOneConfig || !sftpTwoConfig) {
-            throw new Error('SFTP configuration is missing.');
-        }
+export async function watchAndTransferFiles(pollIntervalMs = 5000) {
+    const sftpOneConfig = await settings.getSFTPConfigOne();
+    const sftpTwoConfig = await settings.getSFTPConfigTwo();
 
-        const requiredFields: (keyof SFTPConfig)[] = ['host', 'port', 'username', 'password'];
+    if (!sftpOneConfig || !sftpTwoConfig) {
+        throw new Error('SFTP configuration is missing.');
+    }
 
-        const configs: [string, SFTPConfig][] = [
-            ['SFTP One', sftpOneConfig],
-            ['SFTP Two', sftpTwoConfig],
-        ];
+    if (!sftpOneConfig.host || !sftpTwoConfig.host) {
+        throw new Error('SFTP host is not configured.');
+    }
 
-        for (const [name, config] of configs) {
-            for (const field of requiredFields) {
-                if (!config[field]) {
-                    throw new Error(`${name} configuration is missing "${field}".`);
+    if (!sftpOneConfig.remotePath || !sftpTwoConfig.uploadPath) {
+        throw new Error('SFTP remote path or upload path is not configured.');
+    }
+
+    if (!sftpOneConfig.username || !sftpTwoConfig.username) {
+        throw new Error('SFTP username is not configured.');
+    }
+
+    if (!sftpOneConfig.password || !sftpTwoConfig.password) {
+        throw new Error('SFTP password is not configured.');
+    }
+
+    await sftp1.connect({ ...sftpOneConfig });
+    await sftp2.connect({ ...sftpTwoConfig });
+
+    const remotePath = sftpOneConfig.remotePath || '';
+    const uploadPath = sftpTwoConfig.uploadPath || '';
+    const localPath = path.join(documentsFolder, "DolphinEnquiries", "completed");
+
+    const transferredFiles = new Set<string>();
+
+    async function poll() {
+        if (isTransferring) return;
+        isTransferring = true;
+
+        try {
+            const fileList = await sftp1.list(remotePath);
+
+            for (const file of fileList) {
+                if (file.type === '-' && !transferredFiles.has(file.name)) {
+                    const remoteFile = `${remotePath}${file.name}`;
+                    const localFile = path.join(localPath, file.name);
+                    const destRemoteFile = `${uploadPath}${file.name}`;
+
+                    const startTime = Date.now();
+
+                    await sftp1.get(remoteFile, localFile);
+                    console.log(`Downloaded ${file.name}`);
+
+                    await sftp1.delete(remoteFile);
+                    console.log(`Deleted source file ${file.name}`);
+
+                    await sftp2.put(localFile, destRemoteFile);
+                    console.log(`Uploaded ${file.name} to destination`);
+
+                    logFileMovement(file.name, destRemoteFile, Date.now() - startTime);
+                    console.log(`Moved ${file.name} to ${destRemoteFile}`);
+
+                    transferredFiles.add(file.name);
                 }
             }
+        } catch (err) {
+            console.error('Error during file transfer:', err);
+        } finally {
+            isTransferring = false;
         }
-
-        await sftp1.connect({
-            host: sftpOneConfig.host,
-            port: sftpOneConfig.port,
-            username: sftpOneConfig.username,
-            password: sftpOneConfig.password,
-        });
-
-        await sftp2.connect({
-            host: sftpTwoConfig.host,
-            port: sftpTwoConfig.port,
-            username: sftpTwoConfig.username,
-            password: sftpTwoConfig.password,
-        });
-
-        const remotePath = sftpOneConfig.remotePath || '';
-        const uploadPath = sftpTwoConfig.uploadPath || '';
-        const localPath = path.join(documentsFolder, "DolphinEnquiries", "completed");
-
-        const fileList = await sftp1.list(remotePath);
-
-        for (const file of fileList) {
-            if (file.type === '-') {
-                const remoteFile = `${remotePath}${file.name}`;
-                const localFile = path.join(localPath, file.name);
-                const destRemoteFile = `${uploadPath}${file.name}`;
-
-                const startTime = Date.now();
-
-                await sftp1.get(remoteFile, localFile);
-                console.log(`Downloaded ${file.name}`);
-
-                await sftp1.delete(remoteFile);
-                console.log(`Deleted source file ${file.name}`);
-
-                await sftp2.put(localFile, destRemoteFile);
-                console.log(`Uploaded ${file.name} to destination`);
-
-                logFileMovement(file.name, destRemoteFile, Date.now() - startTime);
-                console.log(`Moved ${file.name} to ${destRemoteFile}`);
-            }
-        }
-
-        console.log('File transfer completed successfully.');
-
-        await sftp1.end();
-        await sftp2.end();
-    } catch (err) {
-        console.error('Error during file transfer:', err);
-        throw new Error(`File transfer failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
     }
-}
 
-export { transferFiles };
+    setInterval(poll, pollIntervalMs);
+
+    poll();
+}

@@ -2,7 +2,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 import { app, Menu, ipcMain } from "electron";
-import { enableAutoLaunch, setupAutoUpdater, setupScheduler, checkDolphinFiles, transferFiles } from "./features";
+import { enableAutoLaunch, setupAutoUpdater, setupScheduler, checkDolphinFiles, watchAndTransferFiles } from "./features";
 import { createMainWindow, setIsQuitting, setupSettingsHandlers, setupTray } from "./window";
 
 app.whenReady().then(async () => {
@@ -18,11 +18,13 @@ app.whenReady().then(async () => {
   });
 
   setupScheduler(
-    { task: checkDolphinFiles },
-    { task: transferFiles, schedule: '15 1 * * *' }  // runs at 1:15 AM
+    { task: checkDolphinFiles, schedule: '15 1 * * *' }  // runs at 1:15 AM
   );
 
-  if (app.isPackaged) checkDolphinFiles();
+  if (app.isPackaged) {
+    checkDolphinFiles();
+    watchAndTransferFiles();
+  }
 });
 
 app.on("window-all-closed", (e: { preventDefault: () => void; }) => {
