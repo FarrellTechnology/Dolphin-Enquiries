@@ -1,5 +1,5 @@
 import { app, BrowserWindow, nativeImage, nativeTheme } from "electron";
-import { assets } from "../utils";
+import { assets } from "../../utils";
 
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
