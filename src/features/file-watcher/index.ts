@@ -6,6 +6,8 @@ import { documentsFolder, settings } from '../../utils';
 const sftp1 = new Client();
 const sftp2 = new Client();
 
+let isTransferring = false;
+
 function logFileMovement(fileName: string, destinationFolder: string, timeTaken: number) {
     const logDir = path.join(documentsFolder(), "DolphinEnquiries", "logs");
     const logFile = path.join(logDir, `${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.txt`);
@@ -19,8 +21,6 @@ function logFileMovement(fileName: string, destinationFolder: string, timeTaken:
         if (err) console.error('Failed to write log', err);
     });
 }
-
-let isTransferring = false;
 
 export async function watchAndTransferFiles(pollIntervalMs = 5000) {
     const sftpOneConfig = await settings.getSFTPConfigOne();

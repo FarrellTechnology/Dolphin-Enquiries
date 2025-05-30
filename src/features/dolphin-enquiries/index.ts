@@ -2,11 +2,9 @@
 import path from "path";
 import fs from "fs/promises";
 import fsSync from "fs";
-import { XMLParser } from "fast-xml-parser";
 import { saveParsedTravelFolder, sendEmail } from "..";
 import { getMainWindow, updateTrayTooltip } from "../../window";
 import { assets, documentsFolder, loadEmailTemplate } from "../../utils";
-
 
 async function parseFilesAndSendToDatabase(): Promise<Array<{ date: string, leisureCount: number, golfCount: number }>> {
   const baseFolder = path.join(documentsFolder(), "DolphinEnquiries", "completed");
@@ -16,7 +14,6 @@ async function parseFilesAndSendToDatabase(): Promise<Array<{ date: string, leis
     return [];
   }
 
-  const parser = new XMLParser();
   const folderNames = await fs.readdir(baseFolder);
   const results: Array<{ date: string, leisureCount: number, golfCount: number }> = [];
 
