@@ -41,14 +41,6 @@ async function parseFilesAndSendToDatabase(): Promise<Array<{ date: string, leis
         continue;
       }
 
-      let jsonData: any;
-      try {
-        jsonData = parser.parse(xmlContent);
-      } catch {
-        console.warn(`Failed to parse XML in file ${file}, skipping.`);
-        continue;
-      }
-
       let saved = false;
       try {
         saved = await saveParsedTravelFolder(xmlContent);
