@@ -71,16 +71,16 @@ export async function watchAndTransferFiles(pollIntervalMs = 5000) {
                     const startTime = Date.now();
 
                     await sftp1.get(remoteFile, localFile);
-                    console.log(`Downloaded ${file.name}`);
+                    console.warn(`Downloaded ${file.name}`);
 
                     await sftp1.delete(remoteFile);
-                    console.log(`Deleted source file ${file.name}`);
+                    console.warn(`Deleted source file ${file.name}`);
 
                     await sftp2.put(localFile, destRemoteFile);
-                    console.log(`Uploaded ${file.name} to destination`);
+                    console.warn(`Uploaded ${file.name} to destination`);
 
                     logFileMovement(file.name, destRemoteFile, Date.now() - startTime);
-                    console.log(`Moved ${file.name} to ${destRemoteFile}`);
+                    console.warn(`Moved ${file.name} to ${destRemoteFile}`);
 
                     transferredFiles.add(file.name);
                 }

@@ -33,6 +33,11 @@
           data-tab="sftp2" type="button">
           SFTP Two
         </button>
+        <button
+          class="py-2 px-4 border-b-2 border-transparent hover:border-gray-300 dark:hover:border-gray-600 text-gray-600 dark:text-gray-400 focus:outline-none"
+          data-tab="database" type="button">
+          Database
+        </button>
       </nav>
     </div>
 
@@ -71,8 +76,9 @@
         </div>
 
         <div>
-          <label for="to" class="block text-sm font-medium mb-1">Recipient Email</label>
-          <input type="text" id="to" name="to" required
+          <label for="to" class="block text-sm font-medium mb-1">Recipient Email
+            (comma-separated)</label>
+          <input type="text" id="to" name="to" required placeholder="example@email.com,exampletwo@email.com"
             class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
         </div>
 
@@ -156,6 +162,37 @@
         </div>
         <div id="sftp2Status" class="mt-2 text-sm text-center hidden"></div>
       </form>
+
+      <!-- Azure Form -->
+      <form id="databaseForm" class="space-y-4 tab-content hidden" data-tab-content="database">
+        <div>
+          <label for="databaseFormHost" class="block text-sm font-medium mb-1">Host</label>
+          <input type="text" id="databaseFormHost" name="databaseFormHost" required
+            class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
+        </div>
+        <div>
+          <label for="databaseFormUser" class="block text-sm font-medium mb-1">User</label>
+          <input type="text" id="databaseFormUser" name="databaseFormUser" required
+            class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
+        </div>
+        <div>
+          <label for="databaseFormPassword" class="block text-sm font-medium mb-1">Password</label>
+          <input type="password" id="databaseFormPassword" name="databaseFormPassword" required
+            class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
+        </div>
+        <div>
+          <label for="databaseFormDatabase" class="block text-sm font-medium mb-1">Database</label>
+          <input type="text" id="databaseFormDatabase" name="databaseFormDatabase" required
+            class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
+        </div>
+        <div class="pt-4">
+          <button type="submit"
+            class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors">
+            Save Database Settings
+          </button>
+        </div>
+        <div id="databaseFormStatus" class="mt-2 text-sm text-center hidden"></div>
+      </form>
     </div>
   </div>
 
@@ -180,7 +217,6 @@
       });
     });
 
-
     async function loadSettings() {
       const smtpConfig = await window.electronAPI?.getSMTPConfig?.();
       if (smtpConfig) {
@@ -191,6 +227,7 @@
         document.getElementById('pass').value = smtpConfig.pass;
         document.getElementById('to').value = smtpConfig.to;
       }
+
       const sftp1Config = await window.electronAPI?.getSFTP1Config?.();
       if (sftp1Config) {
         document.getElementById('sftp1Host').value = sftp1Config.host;
@@ -207,6 +244,14 @@
         document.getElementById('sftp2User').value = sftp2Config.user;
         document.getElementById('sftp2Pass').value = sftp2Config.pass;
         document.getElementById('sftp2UploadPath').value = sftp2Config.uploadPath;
+      }
+
+      const databaseConfig = await window.electronAPI?.getMySqlDatabaseConfig?.();
+      if (databaseConfig) {
+        document.getElementById('databaseFormHost').value = databaseConfig.host;
+        document.getElementById('databaseFormUser').value = databaseConfig.user;
+        document.getElementById('databaseFormPassword').value = databaseConfig.password;
+        document.getElementById('databaseFormDatabase').value = databaseConfig.database;
       }
     }
 
@@ -307,6 +352,40 @@
 
         if (result.success) {
           status.textContent = 'SFTP Two Settings saved successfully!';
+          status.classList.remove('text-gray-600', 'text-red-600');
+          status.classList.add('text-green-600');
+        } else {
+          throw new Error(result.error || 'Unknown error');
+        }
+      } catch (error) {
+        status.textContent = `Error: ${error.message}`;
+        status.classList.remove('text-gray-600', 'text-green-600');
+        status.classList.add('text-red-600');
+      }
+      status.classList.remove('hidden');
+      setTimeout(() => status.classList.add('hidden'), 5000);
+    });
+
+    document.getElementById('databaseForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const status = document.getElementById('databaseFormStatus');
+      status.textContent = 'Saving...';
+      status.classList.remove('hidden', 'text-red-600', 'text-green-600');
+      status.classList.add('text-gray-600');
+
+      try {
+        const config = {
+          host: document.getElementById('databaseFormHost').value,
+          user: document.getElementById('databaseFormUser').value,
+          password: document.getElementById('databaseFormPassword').value,
+          database: document.getElementById('databaseFormDatabase').value,
+        };
+        const result = await window.electronAPI?.saveMySqlDatabaseConfig?.(config);
+
+        if (!result) throw new Error('No response from backend');
+
+        if (result.success) {
+          status.textContent = 'Database Settings saved successfully!';
           status.classList.remove('text-gray-600', 'text-red-600');
           status.classList.add('text-green-600');
         } else {

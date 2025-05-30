@@ -41,6 +41,12 @@ class Settings {
             username: '',
             password: '',
             uploadPath: '',
+          },
+          mysqlDatabase: {
+            host: '',
+            user: '',
+            password: '',
+            database: ''
           }
         }
       });
@@ -64,22 +70,30 @@ class Settings {
     return config && config.host ? config : null;
   }
 
+  async getMySqlDatabaseConfig(): Promise<MySQLDatabase | null> {
+    await this.initStore();
+    const config = this.store!.get('mysqlDatabase');
+    return config && config.host ? config : null;
+  }
+
   async setSMTPConfig(config: SMTPConfig): Promise<void> {
     await this.initStore();
-    console.log('Setting SMTP config:', config);
     this.store!.set('smtp', config);
   }
 
   async setSFTPConfigOne(config: SFTPConfig): Promise<void> {
     await this.initStore();
-    console.log('Setting SFTP One config:', config);
     this.store!.set('sftpOne', config);
   }
 
   async setSFTPConfigTwo(config: SFTPConfig): Promise<void> {
     await this.initStore();
-    console.log('Setting SFTP Two config:', config);
     this.store!.set('sftpTwo', config);
+  }
+
+  async setMySqlDatabaseConfig(config: MySQLDatabase): Promise<void> {
+    await this.initStore();
+    this.store!.set('mysqlDatabase', config);
   }
 
   async hasSMTPConfig(): Promise<boolean> {
@@ -97,6 +111,12 @@ class Settings {
   async hasSFTPConfigTwo(): Promise<boolean> {
     await this.initStore();
     const config = this.store!.get('sftpTwo');
+    return Boolean(config?.host);
+  }
+
+  async hasMySqlDatabaseConfig(): Promise<boolean> {
+    await this.initStore();
+    const config = this.store!.get('mysqlDatabase');
     return Boolean(config?.host);
   }
 }

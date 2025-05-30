@@ -1,4 +1,5 @@
 import path from "path";
+import fs from "fs/promises";
 import { app } from "electron";
 
 export * from "./settings";
@@ -18,3 +19,25 @@ export const assets = {
   image: (...segments: string[]) => resolveAppPath("images", ...segments),
   js: (...segments: string[]) => resolveAppPath("js", ...segments),
 };
+
+export async function loadEmailTemplate(
+  perDateCounts: Array<{ date: string; leisureCount: number; golfCount: number }>,
+  totalLeisure: number,
+  totalGolf: number
+): Promise<string> {
+  const templatePath = assets.template("email-template.html");
+  let template = await fs.readFile(templatePath, "utf-8");
+
+  const rowsHtml = perDateCounts.map(day => `
+    <tr>
+      <td style="border: 1px solid #ccc; padding: 8px;">${day.date}</td>
+      <td style="border: 1px solid #ccc; padding: 8px; text-align: right;">${day.leisureCount}</td>
+      <td style="border: 1px solid #ccc; padding: 8px; text-align: right;">${day.golfCount}</td>
+    </tr>
+  `).join("");
+
+  return template
+    .replace("{{tableRows}}", rowsHtml)
+    .replace("{{totalLeisure}}", totalLeisure.toString())
+    .replace("{{totalGolf}}", totalGolf.toString());
+}

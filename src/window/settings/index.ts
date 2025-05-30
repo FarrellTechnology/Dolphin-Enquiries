@@ -34,9 +34,15 @@ export async function createSettingsWindow() {
     settingsWindow = null;
   });
 
-  const config = await settings.getSMTPConfig();
+  const smtpConfig = await settings.getSMTPConfig();
+  const sftp1Config = await settings.getSFTPConfigOne();
+  const sftp2Config = await settings.getSFTPConfigTwo();
+  const mysqlConfig = await settings.getMySqlDatabaseConfig();
   settingsWindow.webContents.on('did-finish-load', () => {
-    settingsWindow?.webContents.send('smtp-config', config);
+    settingsWindow?.webContents.send('smtp-config', smtpConfig);
+    settingsWindow?.webContents.send('sftp1-config', sftp1Config);
+    settingsWindow?.webContents.send('sftp2-config', sftp2Config);
+    settingsWindow?.webContents.send('db-config', mysqlConfig);
     settingsWindow?.webContents.send('theme-changed', nativeTheme.shouldUseDarkColors ? 'dark' : 'light');
   });
 
@@ -87,6 +93,21 @@ export function setupSettingsHandlers(ipcMain: Electron.IpcMain) {
     } catch (err: unknown) {
       const error = err as Error;
       dialog.showErrorBox('Error', 'Failed to save SFTP Two settings');
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('get-db-config', async () => {
+    return await settings.getMySqlDatabaseConfig();
+  });
+
+  ipcMain.handle('save-db-config', async (_, config) => {
+    try {
+      await settings.setMySqlDatabaseConfig(config);
+      return { success: true };
+    } catch (err: unknown) {
+      const error = err as Error;
+      dialog.showErrorBox('Error', 'Failed to save MySql Database settings');
       return { success: false, error: error.message };
     }
   });
