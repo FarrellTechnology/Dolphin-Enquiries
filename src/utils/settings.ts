@@ -42,11 +42,14 @@ class Settings {
             password: '',
             uploadPath: '',
           },
-          mysqlDatabase: {
-            host: '',
-            user: '',
+          snowflake: {
+            account: '',
+            username: '',
             password: '',
-            database: ''
+            warehouse: '',
+            database: '',
+            schema: '',
+            role: '',
           }
         }
       });
@@ -70,10 +73,10 @@ class Settings {
     return config && config.host ? config : null;
   }
 
-  async getMySqlDatabaseConfig(): Promise<MySQLDatabase | null> {
+  async getSnowflakeConfig(): Promise<Snowflake | null> {
     await this.initStore();
-    const config = this.store!.get('mysqlDatabase');
-    return config && config.host ? config : null;
+    const config = this.store!.get('snowflake');
+    return config && config.account ? config : null;
   }
 
   async setSMTPConfig(config: SMTPConfig): Promise<void> {
@@ -91,9 +94,9 @@ class Settings {
     this.store!.set('sftpTwo', config);
   }
 
-  async setMySqlDatabaseConfig(config: MySQLDatabase): Promise<void> {
+  async setSnowflakeConfig(config: Snowflake): Promise<void> {
     await this.initStore();
-    this.store!.set('mysqlDatabase', config);
+    this.store!.set('snowflake', config);
   }
 
   async hasSMTPConfig(): Promise<boolean> {
@@ -114,10 +117,10 @@ class Settings {
     return Boolean(config?.host);
   }
 
-  async hasMySqlDatabaseConfig(): Promise<boolean> {
+  async hasSnowflakeConfig(): Promise<boolean> {
     await this.initStore();
-    const config = this.store!.get('mysqlDatabase');
-    return Boolean(config?.host);
+    const config = this.store!.get('snowflake');
+    return Boolean(config?.account);
   }
 }
 

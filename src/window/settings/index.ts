@@ -37,12 +37,12 @@ export async function createSettingsWindow() {
   const smtpConfig = await settings.getSMTPConfig();
   const sftp1Config = await settings.getSFTPConfigOne();
   const sftp2Config = await settings.getSFTPConfigTwo();
-  const mysqlConfig = await settings.getMySqlDatabaseConfig();
+  const snowflakeConfig = await settings.getSnowflakeConfig();
   settingsWindow.webContents.on('did-finish-load', () => {
     settingsWindow?.webContents.send('smtp-config', smtpConfig);
     settingsWindow?.webContents.send('sftp1-config', sftp1Config);
     settingsWindow?.webContents.send('sftp2-config', sftp2Config);
-    settingsWindow?.webContents.send('db-config', mysqlConfig);
+    settingsWindow?.webContents.send('snowflake-config', snowflakeConfig);
     settingsWindow?.webContents.send('theme-changed', nativeTheme.shouldUseDarkColors ? 'dark' : 'light');
   });
 
@@ -97,17 +97,17 @@ export function setupSettingsHandlers(ipcMain: Electron.IpcMain) {
     }
   });
 
-  ipcMain.handle('get-db-config', async () => {
-    return await settings.getMySqlDatabaseConfig();
+  ipcMain.handle('get-snowflake-config', async () => {
+    return await settings.getSnowflakeConfig();
   });
 
-  ipcMain.handle('save-db-config', async (_, config) => {
+  ipcMain.handle('save-snowflake-config', async (_, config) => {
     try {
-      await settings.setMySqlDatabaseConfig(config);
+      await settings.setSnowflakeConfig(config);
       return { success: true };
     } catch (err: unknown) {
       const error = err as Error;
-      dialog.showErrorBox('Error', 'Failed to save MySql Database settings');
+      dialog.showErrorBox('Error', 'Failed to save Snowflake settings');
       return { success: false, error: error.message };
     }
   });

@@ -20,9 +20,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   saveSFTP2Config: (config) => ipcRenderer.invoke("save-sftp2-config", config),
 
   // Azure config
-  getMySqlDatabaseConfig: () => ipcRenderer.invoke("get-db-config"),
-  saveMySqlDatabaseConfig: (config) =>
-    ipcRenderer.invoke("save-db-config", config),
+  getSnowflakeConfig: () => ipcRenderer.invoke("get-snowflake-config"),
+  saveSnowflakeConfig: (config) =>
+    ipcRenderer.invoke("save-snowflake-config", config),
 
   // Theme
   onThemeChanged: (callback) => {

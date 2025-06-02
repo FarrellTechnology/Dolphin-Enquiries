@@ -16,18 +16,21 @@ type SFTPConfig = {
     uploadPath?: string; // optional, but required for SFTP Two
 }
 
-type MySQLDatabase = {
-    host: string;
-    user: string;
-    password: string;
-    database: string;
+type Snowflake = {
+    account: string
+    username: string,
+    password: string,
+    warehouse: string,
+    database: string,
+    schema: string,
+    role: string,
 }
 
 type StoreSchema = {
     smtp: SMTPConfig;
     sftpOne: SFTPConfig;
     sftpTwo: SFTPConfig;
-    mysqlDatabase: MySQLDatabase;
+    snowflake: Snowflake;
 }
 
 type ScheduledTask = {

@@ -1,42 +1,51 @@
-import mysql from 'mysql2/promise';
-import { ResultSetHeader } from 'mysql2';
-import { settings } from '../../utils';
+import snowflake from 'snowflake-sdk';
 import { XMLParser } from 'fast-xml-parser';
+import { settings } from '../../utils';
 
-let pool: mysql.Pool | null = null;
+let connection: snowflake.Connection | null = null;
 let config: any = null;
 
-async function initDbPool() {
-  if (pool) return pool;
+async function initDbConnection() {
+  if (connection) return connection;
 
-  config = await settings.getMySqlDatabaseConfig();
+  config = await settings.getSnowflakeConfig();
 
-  if (!config || !config.user || !config.host || !config.password || !config.database) {
-    throw new Error(
-      'MySQL Database settings not configured or incomplete. Please set up your database settings.'
-    );
-  }
+  if (!config) throw new Error('Snowflake config is missing');
 
-  pool = mysql.createPool({
-    host: config.host,
-    user: config.user,
+  connection = snowflake.createConnection({
+    account: config.account,
+    username: config.user,
     password: config.password,
+    warehouse: config.warehouse,
     database: config.database,
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0,
+    schema: config.schema,
+    role: config.role,
   });
 
-  return pool;
+  return new Promise<snowflake.Connection>((resolve, reject) => {
+    connection!.connect((err, conn) => {
+      if (err) reject(err);
+      else resolve(conn);
+    });
+  });
+}
+
+async function query(conn: snowflake.Connection, sql: string, binds: any[] = []): Promise<any[]> {
+  return new Promise((resolve, reject) => {
+    conn.execute({
+      sqlText: sql,
+      binds,
+      complete: (err, stmt, rows) => {
+        if (err) reject(err);
+        else resolve(rows || []);
+      },
+    });
+  });
 }
 
 export async function saveParsedTravelFolder(xmlString: string): Promise<boolean> {
-  const parser = new XMLParser({
-    ignoreAttributes: false,
-    attributeNamePrefix: "",
-  });
+  const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "" });
   const json = parser.parse(xmlString);
-
   const travelFolder = json.DTM_TravelFolder.TravelFolder;
 
   const enquiry: Enquiry = {
@@ -51,12 +60,9 @@ export async function saveParsedTravelFolder(xmlString: string): Promise<boolean
   };
 
   const comments = travelFolder.ReservationCommentItems?.ReservationCommentItem;
-  let tripDetailsRawText = "";
-  if (Array.isArray(comments)) {
-    tripDetailsRawText = comments.map(c => c.Text).join(" | ");
-  } else if (comments) {
-    tripDetailsRawText = comments.Text;
-  }
+  let tripDetailsRawText = Array.isArray(comments)
+    ? comments.map(c => c.Text).join(" | ")
+    : comments?.Text || "";
 
   const tripDetails: TripDetails = {
     hotel: null,
@@ -72,46 +78,29 @@ export async function saveParsedTravelFolder(xmlString: string): Promise<boolean
     airport: null,
   };
 
-  if (tripDetailsRawText) {
-    const matchHotel = tripDetailsRawText.match(/Hotel:\s*([^|]+)/i);
-    if (matchHotel) tripDetails.hotel = matchHotel[1].trim();
+  const match = (regex: RegExp) => tripDetailsRawText.match(regex)?.[1]?.trim();
+  const toInt = (val: string | undefined) => val ? parseInt(val) : null;
+  const toFloat = (val: string | undefined) => val ? parseFloat(val.replace(/,/g, '')) : null;
 
-    const matchNights = tripDetailsRawText.match(/Nights:\s*(\d+)/i);
-    if (matchNights) tripDetails.nights = parseInt(matchNights[1]);
+  tripDetails.hotel = match(/Hotel:\s*([^|]+)/i) || null;
+  tripDetails.nights = toInt(match(/Nights:\s*(\d+)/i));
+  tripDetails.golfers = toInt(match(/Golfers:\s*(\d+)/i));
+  tripDetails.non_golfers = toInt(match(/Non Golfers:\s*(\d*)/i));
+  tripDetails.rounds = toInt(match(/Rounds:\s*(\d+)/i));
+  tripDetails.adults = toInt(match(/Adults:\s*(\d+)/i));
+  tripDetails.children = toInt(match(/Children:\s*(\d+)/i));
+  tripDetails.holiday_plans = match(/Holiday Plans:\s*([^|]+)/i) || null;
 
-    const matchGolfers = tripDetailsRawText.match(/Golfers:\s*(\d+)/i);
-    if (matchGolfers) tripDetails.golfers = parseInt(matchGolfers[1]);
-
-    const matchNonGolfers = tripDetailsRawText.match(/Non Golfers:\s*(\d*)/i);
-    if (matchNonGolfers && matchNonGolfers[1].trim() !== "") tripDetails.non_golfers = parseInt(matchNonGolfers[1]);
-
-    const matchRounds = tripDetailsRawText.match(/Rounds:\s*(\d+)/i);
-    if (matchRounds) tripDetails.rounds = parseInt(matchRounds[1]);
-
-    const matchAdults = tripDetailsRawText.match(/Adults:\s*(\d+)/i);
-    if (matchAdults) tripDetails.adults = parseInt(matchAdults[1]);
-
-    const matchChildren = tripDetailsRawText.match(/Children:\s*(\d+)/i);
-    if (matchChildren) tripDetails.children = parseInt(matchChildren[1]);
-
-    const matchHolidayPlans = tripDetailsRawText.match(/Holiday Plans:\s*([^|]+)/i);
-    if (matchHolidayPlans) tripDetails.holiday_plans = matchHolidayPlans[1].trim();
-
-    const matchBudgetRange = tripDetailsRawText.match(/Budget\s*:\s*£?([\d,]+)pp\s*-\s*£?([\d,]+)pp/i);
-    if (matchBudgetRange) {
-      tripDetails.budget_from = parseFloat(matchBudgetRange[1].replace(/,/g, ''));
-      tripDetails.budget_to = parseFloat(matchBudgetRange[2].replace(/,/g, ''));
-    }
-
-    const matchAirport = tripDetailsRawText.match(/Airport\s*([^|]+)/i);
-    if (matchAirport) {
-      tripDetails.airport = matchAirport[1].trim();
-      enquiry.airport = tripDetails.airport;
-    }
+  const budgetRange = tripDetailsRawText.match(/Budget\s*:\s*£?([\d,]+)pp\s*-\s*£?([\d,]+)pp/i);
+  if (budgetRange) {
+    tripDetails.budget_from = toFloat(budgetRange[1]);
+    tripDetails.budget_to = toFloat(budgetRange[2]);
   }
 
-  const customer = travelFolder.CustomerForBooking?.DirectCustomer?.Customer;
+  const airport = match(/Airport\s*([^|]+)/i);
+  if (airport) enquiry.airport = tripDetails.airport = airport;
 
+  const customer = travelFolder.CustomerForBooking?.DirectCustomer?.Customer;
   const customerData: CustomerData = {
     given_name: customer?.PersonName?.GivenName || null,
     surname: customer?.PersonName?.Surname || null,
@@ -121,18 +110,18 @@ export async function saveParsedTravelFolder(xmlString: string): Promise<boolean
   };
 
   let passengers: Passenger[] = [];
-  if (travelFolder.PassengerListItems?.PassengerListItem) {
-    if (Array.isArray(travelFolder.PassengerListItems.PassengerListItem)) {
-      passengers = travelFolder.PassengerListItems.PassengerListItem.map((p: any) => ({
+  const rawPassengers = travelFolder.PassengerListItems?.PassengerListItem;
+  if (rawPassengers) {
+    if (Array.isArray(rawPassengers)) {
+      passengers = rawPassengers.map((p: any) => ({
         given_name: p.PersonName?.GivenName || null,
         surname: p.PersonName?.Surname || null,
       }));
     } else {
-      const p = travelFolder.PassengerListItems.PassengerListItem;
-      passengers = [{
-        given_name: p.PersonName?.GivenName || null,
-        surname: p.PersonName?.Surname || null,
-      }];
+      passengers.push({
+        given_name: rawPassengers.PersonName?.GivenName || null,
+        surname: rawPassengers.PersonName?.Surname || null,
+      });
     }
   }
 
@@ -143,119 +132,96 @@ export async function saveParsedTravelFolder(xmlString: string): Promise<boolean
     ad_id: travelFolder.EnhancedData00 ?? null,
   };
 
-  const pool = await initDbPool();
-  const conn = await pool.getConnection();
-  try {
-    const [existingEnquiryRows] = await conn.execute(
-      `SELECT id FROM enquiries WHERE source_booking_id = ? LIMIT 1`,
-      [enquiry.source_booking_id]
-    ) as [Array<{ id: number }>, any];
+  const conn = await initDbConnection();
 
-    if (existingEnquiryRows.length > 0) {
-      console.warn(`Enquiry with source_booking_id ${enquiry.source_booking_id} already exists, skipping.`);
-      return false;
-    }
-
-    await conn.beginTransaction();
-
-    const [enquiryResult] = await conn.execute(
-      `INSERT INTO enquiries 
-       (source_booking_id, departure_date, create_date, STATUS, is_quote_only, destination_name, destination_country, airport)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        enquiry.source_booking_id,
-        enquiry.departure_date,
-        enquiry.create_date,
-        enquiry.STATUS,
-        enquiry.is_quote_only,
-        enquiry.destination_name,
-        enquiry.destination_country,
-        enquiry.airport,
-      ]
-    ) as [ResultSetHeader, any];
-    const enquiryId = enquiryResult.insertId;
-
-    if (customer) {
-      const [existingCustomerRows] = await conn.execute(
-        `SELECT id FROM customers WHERE email = ? LIMIT 1`,
-        [customerData.email]
-      ) as [Array<{ id: number }>, any];
-
-      if (existingCustomerRows.length === 0) {
-        await conn.execute(
-          `INSERT INTO customers (enquiry_id, given_name, surname, email, phone_number, newsletter_opt_in)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [
-            enquiryId,
-            customerData.given_name,
-            customerData.surname,
-            customerData.email,
-            customerData.phone_number,
-            customerData.newsletter_opt_in,
-          ]
-        );
-      }
-    }
-
-    for (const p of passengers) {
-      const [existingPassengerRows] = await conn.execute(
-        `SELECT id FROM passengers WHERE enquiry_id = ? AND given_name = ? AND surname = ? LIMIT 1`,
-        [enquiryId, p.given_name, p.surname]
-      ) as [Array<{ id: number }>, any];
-      if (existingPassengerRows.length === 0) {
-        await conn.execute(
-          `INSERT INTO passengers (enquiry_id, given_name, surname)
-           VALUES (?, ?, ?)`,
-          [enquiryId, p.given_name, p.surname]
-        );
-      }
-    }
-
-    const [existingTripRows] = await conn.execute(
-      `SELECT id FROM trip_details WHERE enquiry_id = ? LIMIT 1`,
-      [enquiryId]
-    ) as [Array<{ id: number }>, any];
-    if (existingTripRows.length === 0) {
-      await conn.execute(
-        `INSERT INTO trip_details
-         (enquiry_id, hotel, nights, golfers, non_golfers, rounds, adults, children, holiday_plans, budget_from, budget_to)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          enquiryId,
-          tripDetails.hotel,
-          tripDetails.nights,
-          tripDetails.golfers,
-          tripDetails.non_golfers,
-          tripDetails.rounds,
-          tripDetails.adults,
-          tripDetails.children,
-          tripDetails.holiday_plans,
-          tripDetails.budget_from,
-          tripDetails.budget_to,
-        ]
-      );
-    }
-
-    if (marketing.campaign_code || marketing.source || marketing.medium || marketing.ad_id) {
-      await conn.execute(
-        `INSERT INTO marketing (enquiry_id, campaign_code, SOURCE, MEDIUM, ad_id)
-     VALUES (?, ?, ?, ?, ?)`,
-        [
-          enquiryId,
-          marketing.campaign_code,
-          marketing.source,
-          marketing.medium,
-          marketing.ad_id,
-        ]
-      );
-    }
-
-    await conn.commit();
-    return true;
-  } catch (error) {
-    await conn.rollback();
-    throw error;
-  } finally {
-    conn.release();
+  // Check if enquiry exists
+  const existing = await query(conn, `SELECT id FROM enquiries WHERE source_booking_id = ? LIMIT 1`, [enquiry.source_booking_id]);
+  if (existing.length > 0) {
+    console.warn(`Enquiry with source_booking_id ${enquiry.source_booking_id} already exists, skipping.`);
+    return false;
   }
+
+  // Insert enquiry
+  await query(conn, `
+    INSERT INTO enquiries (source_booking_id, departure_date, create_date, STATUS, is_quote_only, destination_name, destination_country, airport)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [
+    enquiry.source_booking_id,
+    enquiry.departure_date,
+    enquiry.create_date,
+    enquiry.STATUS,
+    enquiry.is_quote_only,
+    enquiry.destination_name,
+    enquiry.destination_country,
+    enquiry.airport,
+  ]);
+
+  const insertedEnquiry = await query(conn, `SELECT id FROM enquiries WHERE source_booking_id = ?`, [enquiry.source_booking_id]);
+  const enquiryId = insertedEnquiry[0].ID;
+
+  // Insert customer
+  if (customerData.email) {
+    const exists = await query(conn, `SELECT id FROM customers WHERE email = ? LIMIT 1`, [customerData.email]);
+    if (exists.length === 0) {
+      await query(conn, `
+        INSERT INTO customers (enquiry_id, given_name, surname, email, phone_number, newsletter_opt_in)
+        VALUES (?, ?, ?, ?, ?, ?)`, [
+        enquiryId,
+        customerData.given_name,
+        customerData.surname,
+        customerData.email,
+        customerData.phone_number,
+        customerData.newsletter_opt_in,
+      ]);
+    }
+  }
+
+  // Insert passengers
+  for (const p of passengers) {
+    const existing = await query(conn,
+      `SELECT id FROM passengers WHERE enquiry_id = ? AND given_name = ? AND surname = ? LIMIT 1`,
+      [enquiryId, p.given_name, p.surname]
+    );
+    if (existing.length === 0) {
+      await query(conn, `
+        INSERT INTO passengers (enquiry_id, given_name, surname)
+        VALUES (?, ?, ?)`, [
+        enquiryId, p.given_name, p.surname
+      ]);
+    }
+  }
+
+  // Insert trip_details
+  const tripExists = await query(conn, `SELECT id FROM trip_details WHERE enquiry_id = ? LIMIT 1`, [enquiryId]);
+  if (tripExists.length === 0) {
+    await query(conn, `
+      INSERT INTO trip_details (enquiry_id, hotel, nights, golfers, non_golfers, rounds, adults, children, holiday_plans, budget_from, budget_to)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+      enquiryId,
+      tripDetails.hotel,
+      tripDetails.nights,
+      tripDetails.golfers,
+      tripDetails.non_golfers,
+      tripDetails.rounds,
+      tripDetails.adults,
+      tripDetails.children,
+      tripDetails.holiday_plans,
+      tripDetails.budget_from,
+      tripDetails.budget_to,
+    ]);
+  }
+
+  // Insert marketing
+  if (marketing.campaign_code || marketing.source || marketing.medium || marketing.ad_id) {
+    await query(conn, `
+      INSERT INTO marketing (enquiry_id, campaign_code, SOURCE, MEDIUM, ad_id)
+      VALUES (?, ?, ?, ?, ?)`, [
+      enquiryId,
+      marketing.campaign_code,
+      marketing.source,
+      marketing.medium,
+      marketing.ad_id,
+    ]);
+  }
+
+  return true;
 }
