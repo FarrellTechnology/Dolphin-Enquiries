@@ -386,7 +386,7 @@
 
     document.getElementById('snowflakeForm').addEventListener('submit', async (e) => {
       e.preventDefault();
-      const status = document.getElementById('databaseFormStatus');
+      const status = document.getElementById('snowflakeFormStatus');
       status.textContent = 'Saving...';
       status.classList.remove('hidden', 'text-red-600', 'text-green-600');
       status.classList.add('text-gray-600');
@@ -401,7 +401,7 @@
           schema: document.getElementById('schema').value,
           role: document.getElementById('role').value,
         };
-        const result = await window.electronAPI?.saveMySqlDatabaseConfig?.(config);
+        const result = await window.electronAPI?.saveSnowflakeConfig?.(config);
 
         if (!result) throw new Error('No response from backend');
 
