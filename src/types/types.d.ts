@@ -7,7 +7,7 @@ type SMTPConfig = {
     to: string;
 }
 
-type SFTPConfig = {
+type FTPConfig = {
     host: string;
     port: number;
     username: string;
@@ -28,8 +28,8 @@ type Snowflake = {
 
 type StoreSchema = {
     smtp: SMTPConfig;
-    sftpOne: SFTPConfig;
-    sftpTwo: SFTPConfig;
+    sftpOne: FTPConfig;
+    sftpTwo: FTPConfig;
     snowflake: Snowflake;
 }
 
@@ -47,6 +47,7 @@ type Enquiry = {
     destination_name: string | null;
     destination_country: string | null;
     airport: string | null;
+    source_type: string | null;
 };
 
 type TripDetails = {
@@ -82,3 +83,5 @@ type Marketing = {
     medium: string | null,
     ad_id: string | null,
 }
+
+type UnifiedFileInfo = SftpFileInfo | FtpFileInfo;

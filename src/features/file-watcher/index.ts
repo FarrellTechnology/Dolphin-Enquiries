@@ -1,10 +1,10 @@
-import Client from 'ssh2-sftp-client';
 import fs from 'fs';
 import path from 'path';
-import { documentsFolder, settings } from '../../utils';
-
-const sftp1 = new Client();
-const sftp2 = new Client();
+import { app } from 'electron';
+import { documentsFolder, isRegularFile, settings, TransferClient } from '../../utils';
+const cronitor = require('cronitor')(app.isPackaged ? process.env.PROD_CRONITOR_API_KEY : process.env.PROD_CRONITOR_API_KEY);
+const fileMonitor = new cronitor.Monitor('EFR-Electron-Mover');
+const uploadingMonitor = new cronitor.Monitor('EFR-Electron-Uploading');
 
 let isTransferring = false;
 
@@ -22,77 +22,85 @@ function logFileMovement(fileName: string, destinationFolder: string, timeTaken:
     });
 }
 
-export async function watchAndTransferFiles(pollIntervalMs = 5000) {
-    const sftpOneConfig = await settings.getSFTPConfigOne();
-    const sftpTwoConfig = await settings.getSFTPConfigTwo();
+export async function watchAndTransferFiles() {
+    const configOne = await settings.getSFTPConfigOne();
+    const configTwo = await settings.getSFTPConfigTwo();
 
-    if (!sftpOneConfig || !sftpTwoConfig) {
-        throw new Error('SFTP configuration is missing.');
+    if (!configOne || !configTwo) {
+        console.error("SFTP configurations are not set up correctly.");
+        return;
     }
 
-    if (!sftpOneConfig.host || !sftpTwoConfig.host) {
-        throw new Error('SFTP host is not configured.');
+    const client1 = new TransferClient(configOne);
+    const client2 = new TransferClient(configTwo);
+
+    await client1.connect();
+    await client2.connect();
+
+    const remotePath = configOne.remotePath || "/";
+    const uploadPath = configTwo.uploadPath || "/";
+    const todayFolderName = new Date().toISOString().slice(0, 10).replace(/-/g, ''); // "yyyymmdd"
+    const localPath = path.join(documentsFolder(), "DolphinEnquiries", "completed", todayFolderName);
+
+    if (!fs.existsSync(localPath)) {
+        fs.mkdirSync(localPath, { recursive: true });
     }
-
-    if (!sftpOneConfig.remotePath || !sftpTwoConfig.uploadPath) {
-        throw new Error('SFTP remote path or upload path is not configured.');
-    }
-
-    if (!sftpOneConfig.username || !sftpTwoConfig.username) {
-        throw new Error('SFTP username is not configured.');
-    }
-
-    if (!sftpOneConfig.password || !sftpTwoConfig.password) {
-        throw new Error('SFTP password is not configured.');
-    }
-
-    await sftp1.connect({ ...sftpOneConfig });
-    await sftp2.connect({ ...sftpTwoConfig });
-
-    const remotePath = sftpOneConfig.remotePath || '';
-    const uploadPath = sftpTwoConfig.uploadPath || '';
-    const localPath = path.join(documentsFolder(), "DolphinEnquiries", "completed");
 
     const transferredFiles = new Set<string>();
 
-    async function poll() {
-        if (isTransferring) return;
-        isTransferring = true;
+    if (isTransferring) return;
+    isTransferring = true;
 
-        try {
-            const fileList = await sftp1.list(remotePath);
+    try {
+        const fileList = await client1.list(remotePath);
+        console.debug(`Found ${fileList.length} files in source directory`);
 
-            for (const file of fileList) {
-                if (file.type === '-' && !transferredFiles.has(file.name)) {
-                    const remoteFile = `${remotePath}${file.name}`;
-                    const localFile = path.join(localPath, file.name);
-                    const destRemoteFile = `${uploadPath}${file.name}`;
+        for (const file of fileList) {
+            const fileName = file.name;
+            const isFile = isRegularFile(file);
 
-                    const startTime = Date.now();
+            if (isFile && !transferredFiles.has(fileName)) {
+                fileMonitor.ping({ state: 'run' });
+                uploadingMonitor.ping({ message: fileName });
+                const remoteFile = `${remotePath}${fileName}`;
+                const localFile = path.join(localPath, fileName);
+                const baseRemotePath = uploadPath;
 
-                    await sftp1.get(remoteFile, localFile);
-                    console.warn(`Downloaded ${file.name}`);
+                let destFolder = baseRemotePath;
 
-                    await sftp1.delete(remoteFile);
-                    console.warn(`Deleted source file ${file.name}`);
-
-                    await sftp2.put(localFile, destRemoteFile);
-                    console.warn(`Uploaded ${file.name} to destination`);
-
-                    logFileMovement(file.name, destRemoteFile, Date.now() - startTime);
-                    console.warn(`Moved ${file.name} to ${destRemoteFile}`);
-
-                    transferredFiles.add(file.name);
+                if (fileName.toLowerCase().startsWith('egr')) {
+                    destFolder = path.posix.join(baseRemotePath, 'XML-EGR/');
+                } else if (fileName.toLowerCase().startsWith('lwc')) {
+                    destFolder = path.posix.join(baseRemotePath, 'XML-LWC/');
                 }
+
+                if (!destFolder.endsWith('/')) destFolder += '/';
+
+                const destRemoteFile = destFolder + fileName;
+
+                const startTime = Date.now();
+
+                await client1.get(remoteFile, localFile);
+                console.debug(`Downloaded ${fileName}`);
+
+                await client1.delete(remoteFile);
+                console.debug(`Deleted source file ${fileName}`);
+
+                await client2.put(localFile, destRemoteFile);
+                console.debug(`Uploaded ${fileName} to destination`);
+
+                logFileMovement(fileName, destRemoteFile, Date.now() - startTime);
+                transferredFiles.add(fileName);
+
+                fileMonitor.ping({ state: 'complete' });
             }
-        } catch (err) {
-            console.error('Error during file transfer:', err);
-        } finally {
-            isTransferring = false;
         }
+    } catch (err) {
+        console.error("File transfer error:", err);
+        fileMonitor.ping({ state: 'fail', message: 'Transfer failed' });
+    } finally {
+        await client1.end();
+        await client2.end();
+        isTransferring = false;
     }
-
-    setInterval(poll, pollIntervalMs);
-
-    poll();
 }

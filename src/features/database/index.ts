@@ -1,6 +1,9 @@
 import snowflake from 'snowflake-sdk';
+import * as fs from "fs";
+import * as path from "path";
+import { decode } from "he";
 import { XMLParser } from 'fast-xml-parser';
-import { settings } from '../../utils';
+import { getSourceTypeFromFileName, settings } from '../../utils';
 
 let connection: snowflake.Connection | null = null;
 let config: any = null;
@@ -14,7 +17,7 @@ async function initDbConnection() {
 
   connection = snowflake.createConnection({
     account: config.account,
-    username: config.user,
+    username: config.username,
     password: config.password,
     warehouse: config.warehouse,
     database: config.database,
@@ -43,20 +46,22 @@ async function query(conn: snowflake.Connection, sql: string, binds: any[] = [])
   });
 }
 
-export async function saveParsedTravelFolder(xmlString: string): Promise<boolean> {
+export async function saveParsedTravelFolder(xmlString: string, fileName: string): Promise<boolean> {
   const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "" });
   const json = parser.parse(xmlString);
   const travelFolder = json.DTM_TravelFolder.TravelFolder;
+  const sourceType = getSourceTypeFromFileName(fileName);
 
   const enquiry: Enquiry = {
-    source_booking_id: travelFolder.SourceBookingID ?? null,
+    source_booking_id: travelFolder.SourceBookingID ?? "",
     departure_date: travelFolder.BookingDepartureDate ?? null,
     create_date: travelFolder.SourceBookingCreateDate ?? null,
     STATUS: travelFolder.WorkflowStatus ?? null,
     is_quote_only: travelFolder.IsQuoteOnly === "true" ? 1 : 0,
-    destination_name: travelFolder.BookingDestinationName ?? null,
-    destination_country: travelFolder.BookingDestinationCountryCode ?? null,
-    airport: null,
+    destination_name: "",
+    destination_country: travelFolder.BookingDestinationCountryCode ?? "",
+    airport: "",
+    source_type: sourceType || "",
   };
 
   const comments = travelFolder.ReservationCommentItems?.ReservationCommentItem;
@@ -64,41 +69,57 @@ export async function saveParsedTravelFolder(xmlString: string): Promise<boolean
     ? comments.map(c => c.Text).join(" | ")
     : comments?.Text || "";
 
-  const tripDetails: TripDetails = {
-    hotel: null,
-    nights: null,
-    golfers: null,
-    non_golfers: null,
-    rounds: null,
-    adults: null,
-    children: null,
-    holiday_plans: null,
-    budget_from: null,
-    budget_to: null,
-    airport: null,
-  };
+  const parts = tripDetailsRawText.split('|').map((p: string) => p.trim());
 
-  const match = (regex: RegExp) => tripDetailsRawText.match(regex)?.[1]?.trim();
-  const toInt = (val: string | undefined) => val ? parseInt(val) : null;
-  const toFloat = (val: string | undefined) => val ? parseFloat(val.replace(/,/g, '')) : null;
+  const kvMap: Record<string, string> = {};
+  for (const part of parts) {
+    if (!part) continue;
 
-  tripDetails.hotel = match(/Hotel:\s*([^|]+)/i) || null;
-  tripDetails.nights = toInt(match(/Nights:\s*(\d+)/i));
-  tripDetails.golfers = toInt(match(/Golfers:\s*(\d+)/i));
-  tripDetails.non_golfers = toInt(match(/Non Golfers:\s*(\d*)/i));
-  tripDetails.rounds = toInt(match(/Rounds:\s*(\d+)/i));
-  tripDetails.adults = toInt(match(/Adults:\s*(\d+)/i));
-  tripDetails.children = toInt(match(/Children:\s*(\d+)/i));
-  tripDetails.holiday_plans = match(/Holiday Plans:\s*([^|]+)/i) || null;
+    const colonIndex = part.indexOf(':');
+    let key = '';
+    let value = '';
 
-  const budgetRange = tripDetailsRawText.match(/Budget\s*:\s*£?([\d,]+)pp\s*-\s*£?([\d,]+)pp/i);
-  if (budgetRange) {
-    tripDetails.budget_from = toFloat(budgetRange[1]);
-    tripDetails.budget_to = toFloat(budgetRange[2]);
+    if (colonIndex !== -1) {
+      key = part.slice(0, colonIndex).trim().toLowerCase();
+      value = part.slice(colonIndex + 1).trim();
+    } else {
+      const spaceIndex = part.indexOf(' ');
+      if (spaceIndex !== -1) {
+        key = part.slice(0, spaceIndex).trim().toLowerCase();
+        value = part.slice(spaceIndex + 1).trim();
+      } else {
+        key = part.trim().toLowerCase();
+        value = '';
+      }
+    }
+
+    if (key) kvMap[key] = decode(value);
   }
 
-  const airport = match(/Airport\s*([^|]+)/i);
-  if (airport) enquiry.airport = tripDetails.airport = airport;
+  const tripDetails: TripDetails = {
+    hotel: kvMap['hotel'] || '',
+    nights: kvMap['nights'] ? parseInt(kvMap['nights']) || null : null,
+    golfers: kvMap['golfers'] ? parseInt(kvMap['golfers']) || null : null,
+    non_golfers: kvMap['non golfers'] ? parseInt(kvMap['non golfers']) || null : null,
+    rounds: kvMap['rounds'] ? parseInt(kvMap['rounds']) || null : null,
+    adults: kvMap['adults'] ? parseInt(kvMap['adults']) || null : null,
+    children: kvMap['children'] ? parseInt(kvMap['children']) || null : null,
+    holiday_plans: kvMap['holiday plans'] || null,
+    airport: kvMap['airport'] || null,
+    budget_from: null,
+    budget_to: null,
+  };
+
+  enquiry.destination_name = kvMap['destination'] ?? null;
+
+  const budgetMatch = tripDetailsRawText.match(/Budget\s*:\s*£?([\d,]+)pp\s*-\s*£?([\d,]+)pp/i);
+  if (budgetMatch) {
+    const toFloat = (val: string) => parseFloat(val.replace(/,/g, '')) || null;
+    tripDetails.budget_from = toFloat(budgetMatch[1]);
+    tripDetails.budget_to = toFloat(budgetMatch[2]);
+  }
+
+  enquiry.airport = tripDetails.airport;
 
   const customer = travelFolder.CustomerForBooking?.DirectCustomer?.Customer;
   const customerData: CustomerData = {
@@ -109,21 +130,24 @@ export async function saveParsedTravelFolder(xmlString: string): Promise<boolean
     newsletter_opt_in: customer?.CommunicationPreferences?.Newsletter ? 1 : 0,
   };
 
-  let passengers: Passenger[] = [];
   const rawPassengers = travelFolder.PassengerListItems?.PassengerListItem;
-  if (rawPassengers) {
-    if (Array.isArray(rawPassengers)) {
-      passengers = rawPassengers.map((p: any) => ({
-        given_name: p.PersonName?.GivenName || null,
-        surname: p.PersonName?.Surname || null,
-      }));
-    } else {
-      passengers.push({
-        given_name: rawPassengers.PersonName?.GivenName || null,
-        surname: rawPassengers.PersonName?.Surname || null,
-      });
-    }
+  const passengers: Passenger[] = (Array.isArray(rawPassengers)
+    ? rawPassengers
+    : rawPassengers ? [rawPassengers] : [])
+    .map((p: any) => ({
+      given_name: p.PersonName?.GivenName || null,
+      surname: p.PersonName?.Surname || null,
+    }));
+
+const csvLine = `"${fileName.replace(/"/g, '""')}",${passengers.length}\n`;
+  const csvPath = path.resolve("parsed_passengers_report.csv");
+
+  // If file doesn't exist, write headers first
+  if (!fs.existsSync(csvPath)) {
+    fs.writeFileSync(csvPath, 'filename,passenger_count\n', { flag: 'wx' });
   }
+  // Append the line (filename, number_of_passengers)
+  fs.appendFileSync(csvPath, csvLine);
 
   const marketing: Marketing = {
     campaign_code: travelFolder.MarketingCampaignCode ?? null,
@@ -134,17 +158,17 @@ export async function saveParsedTravelFolder(xmlString: string): Promise<boolean
 
   const conn = await initDbConnection();
 
-  // Check if enquiry exists
-  const existing = await query(conn, `SELECT id FROM enquiries WHERE source_booking_id = ? LIMIT 1`, [enquiry.source_booking_id]);
+  const existing = await query(conn, `SELECT ID FROM ENQUIRIES WHERE SOURCE_BOOKING_ID = ? LIMIT 1`, [enquiry.source_booking_id]);
   if (existing.length > 0) {
-    console.warn(`Enquiry with source_booking_id ${enquiry.source_booking_id} already exists, skipping.`);
+    console.debug(`Enquiry with SOURCE_BOOKING_ID ${enquiry.source_booking_id} already exists, skipping.`);
     return false;
   }
 
-  // Insert enquiry
+  console.debug(`Inserting new enquiry with SOURCE_BOOKING_ID ${enquiry.source_booking_id}`);
+
   await query(conn, `
-    INSERT INTO enquiries (source_booking_id, departure_date, create_date, STATUS, is_quote_only, destination_name, destination_country, airport)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, [
+    INSERT INTO ENQUIRIES (SOURCE_BOOKING_ID, DEPARTURE_DATE, CREATE_DATE, STATUS, IS_QUOTE_ONLY, DESTINATION_NAME, DESTINATION_COUNTRY, AIRPORT, SOURCE_TYPE)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
     enquiry.source_booking_id,
     enquiry.departure_date,
     enquiry.create_date,
@@ -153,48 +177,16 @@ export async function saveParsedTravelFolder(xmlString: string): Promise<boolean
     enquiry.destination_name,
     enquiry.destination_country,
     enquiry.airport,
+    enquiry.source_type,
   ]);
 
-  const insertedEnquiry = await query(conn, `SELECT id FROM enquiries WHERE source_booking_id = ?`, [enquiry.source_booking_id]);
+  const insertedEnquiry = await query(conn, `SELECT ID FROM ENQUIRIES WHERE SOURCE_BOOKING_ID = ?`, [enquiry.source_booking_id]);
   const enquiryId = insertedEnquiry[0].ID;
 
-  // Insert customer
-  if (customerData.email) {
-    const exists = await query(conn, `SELECT id FROM customers WHERE email = ? LIMIT 1`, [customerData.email]);
-    if (exists.length === 0) {
-      await query(conn, `
-        INSERT INTO customers (enquiry_id, given_name, surname, email, phone_number, newsletter_opt_in)
-        VALUES (?, ?, ?, ?, ?, ?)`, [
-        enquiryId,
-        customerData.given_name,
-        customerData.surname,
-        customerData.email,
-        customerData.phone_number,
-        customerData.newsletter_opt_in,
-      ]);
-    }
-  }
-
-  // Insert passengers
-  for (const p of passengers) {
-    const existing = await query(conn,
-      `SELECT id FROM passengers WHERE enquiry_id = ? AND given_name = ? AND surname = ? LIMIT 1`,
-      [enquiryId, p.given_name, p.surname]
-    );
-    if (existing.length === 0) {
-      await query(conn, `
-        INSERT INTO passengers (enquiry_id, given_name, surname)
-        VALUES (?, ?, ?)`, [
-        enquiryId, p.given_name, p.surname
-      ]);
-    }
-  }
-
-  // Insert trip_details
-  const tripExists = await query(conn, `SELECT id FROM trip_details WHERE enquiry_id = ? LIMIT 1`, [enquiryId]);
+  const tripExists = await query(conn, `SELECT ID FROM TRIP_DETAILS WHERE ENQUIRY_ID = ? LIMIT 1`, [enquiryId]);
   if (tripExists.length === 0) {
     await query(conn, `
-      INSERT INTO trip_details (enquiry_id, hotel, nights, golfers, non_golfers, rounds, adults, children, holiday_plans, budget_from, budget_to)
+      INSERT INTO TRIP_DETAILS (ENQUIRY_ID, HOTEL, NIGHTS, GOLFERS, NON_GOLFERS, ROUNDS, ADULTS, CHILDREN, HOLIDAY_PLANS, BUDGET_FROM, BUDGET_TO)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
       enquiryId,
       tripDetails.hotel,
@@ -210,17 +202,53 @@ export async function saveParsedTravelFolder(xmlString: string): Promise<boolean
     ]);
   }
 
-  // Insert marketing
+
+  if (customerData.email) {
+    const existing = await query(conn, `SELECT ID FROM CUSTOMERS WHERE EMAIL = ? LIMIT 1`, [customerData.email]);
+    if (existing.length === 0) {
+      await query(conn, `
+        INSERT INTO CUSTOMERS (ENQUIRY_ID, GIVEN_NAME, SURNAME, EMAIL, PHONE_NUMBER, NEWSLETTER_OPT_IN)
+        VALUES (?, ?, ?, ?, ?, ?)`, [
+        enquiryId,
+        customerData.given_name,
+        customerData.surname,
+        customerData.email,
+        customerData.phone_number,
+        customerData.newsletter_opt_in,
+      ]);
+    }
+  }
+
+  for (const p of passengers) {
+    const existing = await query(conn,
+      `SELECT ID FROM PASSENGERS WHERE ENQUIRY_ID = ? AND GIVEN_NAME = ? AND SURNAME = ? LIMIT 1`,
+      [enquiryId, p.given_name, p.surname]
+    );
+    if (existing.length === 0) {
+      await query(conn, `
+        INSERT INTO PASSENGERS (ENQUIRY_ID, GIVEN_NAME, SURNAME)
+        VALUES (?, ?, ?)`, [
+        enquiryId, p.given_name, p.surname
+      ]);
+    }
+  }
+
   if (marketing.campaign_code || marketing.source || marketing.medium || marketing.ad_id) {
-    await query(conn, `
-      INSERT INTO marketing (enquiry_id, campaign_code, SOURCE, MEDIUM, ad_id)
+    const existing = await query(conn,
+      `SELECT ID FROM MARKETING WHERE ENQUIRY_ID = ? LIMIT 1`,
+      [enquiryId]
+    );
+    if (existing.length === 0) {
+      await query(conn, `
+      INSERT INTO MARKETING (ENQUIRY_ID, CAMPAIGN_CODE, SOURCE, MEDIUM, AD_ID)
       VALUES (?, ?, ?, ?, ?)`, [
-      enquiryId,
-      marketing.campaign_code,
-      marketing.source,
-      marketing.medium,
-      marketing.ad_id,
-    ]);
+        enquiryId,
+        marketing.campaign_code,
+        marketing.source,
+        marketing.medium,
+        marketing.ad_id,
+      ]);
+    }
   }
 
   return true;

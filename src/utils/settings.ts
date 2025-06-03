@@ -62,12 +62,13 @@ class Settings {
     return config && config.host ? config : null;
   }
 
-  async getSFTPConfigOne(): Promise<SFTPConfig | null> {
+  async getSFTPConfigOne(): Promise<FTPConfig | null> {
     await this.initStore();
     const config = this.store!.get('sftpOne');
     return config && config.host ? config : null;
   }
-  async getSFTPConfigTwo(): Promise<SFTPConfig | null> {
+
+  async getSFTPConfigTwo(): Promise<FTPConfig | null> {
     await this.initStore();
     const config = this.store!.get('sftpTwo');
     return config && config.host ? config : null;
@@ -84,12 +85,12 @@ class Settings {
     this.store!.set('smtp', config);
   }
 
-  async setSFTPConfigOne(config: SFTPConfig): Promise<void> {
+  async setSFTPConfigOne(config: FTPConfig): Promise<void> {
     await this.initStore();
     this.store!.set('sftpOne', config);
   }
 
-  async setSFTPConfigTwo(config: SFTPConfig): Promise<void> {
+  async setSFTPConfigTwo(config: FTPConfig): Promise<void> {
     await this.initStore();
     this.store!.set('sftpTwo', config);
   }

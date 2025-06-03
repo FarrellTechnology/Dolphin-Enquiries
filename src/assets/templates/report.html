@@ -14,7 +14,7 @@
   <table class="border border-gray-300 dark:border-gray-600 rounded w-full max-w-2xl">
     <thead>
       <tr class="bg-gray-200 dark:bg-gray-700">
-        <th class="text-left px-4 py-2">Date</th>
+        <th class="text-left px-4 py-2" id="date-header">Date</th>
         <th class="text-right px-4 py-2">Leisure</th>
         <th class="text-right px-4 py-2">Golf</th>
         <th class="text-right px-4 py-2">Total</th>
@@ -28,25 +28,81 @@
   <script>
     window.electronAPI.onReportData((report) => {
       const body = document.getElementById('report-body');
+      body.innerHTML = ''; // clear existing rows
+
+      // Helper: parse date string (assumed format: yyyy-mm-dd)
+      const parseDate = (str) => new Date(str);
+
+      // Get unique months from dates
+      const monthsSet = new Set();
+      report.perDateCounts.forEach(({ date }) => {
+        const d = parseDate(date);
+        const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        monthsSet.add(monthKey);
+      });
+
+      const months = Array.from(monthsSet);
+      const isMultiMonth = months.length > 1;
+
       let totalLeisure = 0;
       let totalGolf = 0;
 
-      report.perDateCounts.forEach(({ date, leisureCount, golfCount }) => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-          <td class="border-t border-gray-300 dark:border-gray-600 px-4 py-2">${date}</td>
-          <td class="border-t border-gray-300 dark:border-gray-600 text-right px-4 py-2">${leisureCount}</td>
-          <td class="border-t border-gray-300 dark:border-gray-600 text-right px-4 py-2">${golfCount}</td>
-          <td class="border-t border-gray-300 dark:border-gray-600 text-right px-4 py-2">${leisureCount + golfCount}</td>
-        `;
-        body.appendChild(row);
+      if (isMultiMonth) {
+        // Monthly summary mode
 
-        totalLeisure += leisureCount;
-        totalGolf += golfCount;
-      });
+        // Update header text to "Month"
+        document.getElementById('date-header').textContent = 'Month';
 
-      document.getElementById('summary').textContent = `Processed ${report.perDateCounts.length} dates — Total Leisure: ${totalLeisure}, Golf: ${totalGolf}`;
+        // Aggregate by month
+        const monthlyMap = new Map();
+
+        report.perDateCounts.forEach(({ date, leisureCount, golfCount }) => {
+          const d = parseDate(date);
+          const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+
+          if (!monthlyMap.has(monthKey)) {
+            monthlyMap.set(monthKey, { leisureCount: 0, golfCount: 0 });
+          }
+
+          const agg = monthlyMap.get(monthKey);
+          agg.leisureCount += leisureCount;
+          agg.golfCount += golfCount;
+        });
+
+        // Insert rows for each month
+        for (const [month, counts] of monthlyMap.entries()) {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td class="border-t border-gray-300 dark:border-gray-600 px-4 py-2">${month}</td>
+            <td class="border-t border-gray-300 dark:border-gray-600 text-right px-4 py-2">${counts.leisureCount}</td>
+            <td class="border-t border-gray-300 dark:border-gray-600 text-right px-4 py-2">${counts.golfCount}</td>
+            <td class="border-t border-gray-300 dark:border-gray-600 text-right px-4 py-2">${counts.leisureCount + counts.golfCount}</td>
+          `;
+          body.appendChild(row);
+
+          totalLeisure += counts.leisureCount;
+          totalGolf += counts.golfCount;
+        }
+      } else {
+        // Single month mode: show daily rows
+        report.perDateCounts.forEach(({ date, leisureCount, golfCount }) => {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td class="border-t border-gray-300 dark:border-gray-600 px-4 py-2">${date}</td>
+            <td class="border-t border-gray-300 dark:border-gray-600 text-right px-4 py-2">${leisureCount}</td>
+            <td class="border-t border-gray-300 dark:border-gray-600 text-right px-4 py-2">${golfCount}</td>
+            <td class="border-t border-gray-300 dark:border-gray-600 text-right px-4 py-2">${leisureCount + golfCount}</td>
+          `;
+          body.appendChild(row);
+
+          totalLeisure += leisureCount;
+          totalGolf += golfCount;
+        });
+      }
+
+      document.getElementById('summary').textContent = `Processed ${report.perDateCounts.length} enquiries — Total Leisure: ${totalLeisure}, Golf: ${totalGolf}`;
     });
   </script>
 </body>
+
 </html>

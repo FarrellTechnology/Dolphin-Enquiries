@@ -247,8 +247,8 @@
       if (sftp1Config) {
         document.getElementById('sftp1Host').value = sftp1Config.host;
         document.getElementById('sftp1Port').value = sftp1Config.port;
-        document.getElementById('sftp1User').value = sftp1Config.user;
-        document.getElementById('sftp1Pass').value = sftp1Config.pass;
+        document.getElementById('sftp1User').value = sftp1Config.username;
+        document.getElementById('sftp1Pass').value = sftp1Config.password;
         document.getElementById('sftp1RemotePath').value = sftp1Config.remotePath;
       }
 
@@ -256,8 +256,8 @@
       if (sftp2Config) {
         document.getElementById('sftp2Host').value = sftp2Config.host;
         document.getElementById('sftp2Port').value = sftp2Config.port;
-        document.getElementById('sftp2User').value = sftp2Config.user;
-        document.getElementById('sftp2Pass').value = sftp2Config.pass;
+        document.getElementById('sftp2User').value = sftp2Config.username;
+        document.getElementById('sftp2Pass').value = sftp2Config.password;
         document.getElementById('sftp2UploadPath').value = sftp2Config.uploadPath;
       }
 
@@ -325,8 +325,8 @@
         const config = {
           host: document.getElementById('sftp1Host').value,
           port: parseInt(document.getElementById('sftp1Port').value),
-          user: document.getElementById('sftp1User').value,
-          pass: document.getElementById('sftp1Pass').value,
+          username: document.getElementById('sftp1User').value,
+          password: document.getElementById('sftp1Pass').value,
           remotePath: document.getElementById('sftp1RemotePath').value,
         };
         const result = await window.electronAPI?.saveSFTP1Config?.(config);
@@ -360,8 +360,8 @@
         const config = {
           host: document.getElementById('sftp2Host').value,
           port: parseInt(document.getElementById('sftp2Port').value),
-          user: document.getElementById('sftp2User').value,
-          pass: document.getElementById('sftp2Pass').value,
+          username: document.getElementById('sftp2User').value,
+          password: document.getElementById('sftp2Pass').value,
           uploadPath: document.getElementById('sftp2UploadPath').value,
         };
         const result = await window.electronAPI?.saveSFTP2Config?.(config);

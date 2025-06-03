@@ -10,7 +10,7 @@ async function parseFilesAndSendToDatabase(): Promise<Array<{ date: string, leis
   const baseFolder = path.join(documentsFolder(), "DolphinEnquiries", "completed");
 
   if (!fsSync.existsSync(baseFolder)) {
-    console.warn("Base folder does not exist:", baseFolder);
+    console.error("Base folder does not exist:", baseFolder);
     return [];
   }
 
@@ -20,37 +20,30 @@ async function parseFilesAndSendToDatabase(): Promise<Array<{ date: string, leis
   for (const folderName of folderNames) {
     const folderPath = path.join(baseFolder, folderName);
     const stat = await fs.stat(folderPath);
-    if (!stat.isDirectory() || !/^\d{8}$/.test(folderName)) continue; // skip non-date folders
+    if (!stat.isDirectory() || !/^\d{8}$/.test(folderName)) continue;
 
-    const files = await fs.readdir(folderPath);
+    const files = (await fs.readdir(folderPath)).filter(f => f.toLowerCase().endsWith(".xml"));
     let leisureCount = 0;
     let golfCount = 0;
 
-    for (const file of files) {
-      if (!file.toLowerCase().endsWith(".xml")) continue;
-
-      const fullPath = path.join(folderPath, file);
-      let xmlContent: string;
+    const savePromises = files.map(async (file) => {
       try {
-        xmlContent = await fs.readFile(fullPath, "utf-8");
-      } catch {
-        console.warn(`Failed to read file ${file}, skipping.`);
-        continue;
-      }
-
-      let saved = false;
-      try {
-        saved = await saveParsedTravelFolder(xmlContent);
+        const fullPath = path.join(folderPath, file);
+        const xmlContent = await fs.readFile(fullPath, "utf-8");
+        const saved = await saveParsedTravelFolder(xmlContent, file);
+        return { file, saved };
       } catch (error) {
-        console.error(`Failed to save parsed data for file ${file}:`, error);
+        console.error(`Failed to process file ${file}`, error);
+        return { file, saved: false };
       }
+    });
 
+    const resultsPerFile = await Promise.all(savePromises);
+
+    for (const { file, saved } of resultsPerFile) {
       if (saved) {
-        if (file.toLowerCase().startsWith("lwc")) {
-          leisureCount++;
-        } else if (file.toLowerCase().startsWith("egr")) {
-          golfCount++;
-        }
+        if (file.toLowerCase().startsWith("lwc")) leisureCount++;
+        else if (file.toLowerCase().startsWith("egr")) golfCount++;
       }
     }
 
