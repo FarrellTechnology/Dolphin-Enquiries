@@ -15,7 +15,7 @@ app.whenReady().then(async () => {
   });
 
   setupScheduler(
-    { task: checkDolphinFiles, schedule: '15 1 * * *' },  // runs at 1:15 AM
+    { task: checkDolphinFiles, schedule: '0 1 * * *' },  // runs at 1:00 AM
     { task: watchAndTransferFiles, schedule: '*/5 * * * * *' } // runs every 5 seconds
   );
 
