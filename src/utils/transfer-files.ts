@@ -8,7 +8,7 @@ export class TransferClient {
     private isSFTP: boolean;
 
     constructor(private config: FTPConfig) {
-        this.isSFTP = config.port === 22;
+        this.isSFTP = config.port === 22 || config.port === 54872;
     }
 
     async connect() {
