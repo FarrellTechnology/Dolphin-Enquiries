@@ -21,19 +21,16 @@
       </tr>
     </thead>
     <tbody id="report-body">
-      <!-- Rows will be inserted here -->
     </tbody>
   </table>
 
   <script>
     window.electronAPI.onReportData((report) => {
       const body = document.getElementById('report-body');
-      body.innerHTML = ''; // clear existing rows
+      body.innerHTML = '';
 
-      // Helper: parse date string (assumed format: yyyy-mm-dd)
       const parseDate = (str) => new Date(str);
 
-      // Get unique months from dates
       const monthsSet = new Set();
       report.perDateCounts.forEach(({ date }) => {
         const d = parseDate(date);
@@ -48,12 +45,8 @@
       let totalGolf = 0;
 
       if (isMultiMonth) {
-        // Monthly summary mode
-
-        // Update header text to "Month"
         document.getElementById('date-header').textContent = 'Month';
 
-        // Aggregate by month
         const monthlyMap = new Map();
 
         report.perDateCounts.forEach(({ date, leisureCount, golfCount }) => {
@@ -69,7 +62,6 @@
           agg.golfCount += golfCount;
         });
 
-        // Insert rows for each month
         for (const [month, counts] of monthlyMap.entries()) {
           const row = document.createElement('tr');
           row.innerHTML = `
@@ -84,7 +76,6 @@
           totalGolf += counts.golfCount;
         }
       } else {
-        // Single month mode: show daily rows
         report.perDateCounts.forEach(({ date, leisureCount, golfCount }) => {
           const row = document.createElement('tr');
           row.innerHTML = `

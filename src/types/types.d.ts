@@ -26,11 +26,16 @@ type Snowflake = {
     role: string,
 }
 
+type CronitorConfig = {
+    apiKey: string;
+}
+
 type StoreSchema = {
     smtp: SMTPConfig;
     sftpOne: FTPConfig;
     sftpTwo: FTPConfig;
     snowflake: Snowflake;
+    cronitor: CronitorConfig;
 }
 
 type ScheduledTask = {
@@ -85,3 +90,16 @@ type Marketing = {
 }
 
 type UnifiedFileInfo = SftpFileInfo | FtpFileInfo;
+
+type CronitorPingInput = {
+  state?: 'run' | 'start' | 'complete' | 'fail' | 'warn';
+  message?: string;
+};
+
+type CronitorMonitor = {
+  ping: (input: CronitorPingInput) => void;
+};
+
+type CronitorModule = {
+  Monitor: new (name: string) => CronitorMonitor;
+};

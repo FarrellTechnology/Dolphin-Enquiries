@@ -1,4 +1,3 @@
-// utils/TransferClient.ts
 import SFTPClient from 'ssh2-sftp-client';
 import { Client as FTPClient } from 'basic-ftp';
 import path from 'path';

@@ -38,6 +38,11 @@
           data-tab="snowflake" type="button">
           Snowflake
         </button>
+        <button
+          class="py-2 px-4 border-b-2 border-transparent hover:border-gray-300 dark:hover:border-gray-600 text-gray-600 dark:text-gray-400 focus:outline-none"
+          data-tab="cronitor" type="button">
+          Cronitor
+        </button>
       </nav>
     </div>
 
@@ -208,6 +213,22 @@
         </div>
         <div id="snowflakeFormStatus" class="mt-2 text-sm text-center hidden"></div>
       </form>
+
+      <!-- Cronitor Form -->
+      <form id="cronitorForm" class="space-y-4 tab-content hidden" data-tab-content="cronitor">
+        <div>
+          <label for="apiKey" class="block text-sm font-medium mb-1">API Key</label>
+          <input type="text" id="apiKey" name="apiKey" required
+            class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
+        </div>
+        <div class="pt-4">
+          <button type="submit"
+            class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors">
+            Save Cronitor Settings
+          </button>
+        </div>
+        <div id="cronitorFormStatus" class="mt-2 text-sm text-center hidden"></div>
+      </form>
     </div>
   </div>
 
@@ -270,6 +291,11 @@
         document.getElementById('database').value = databaseConfig.database;
         document.getElementById('schema').value = databaseConfig.schema;
         document.getElementById('role').value = databaseConfig.role;
+      }
+
+      const cronitorConfig = await window.electronAPI?.getCronitorConfig?.();
+      if (cronitorConfig) {
+        document.getElementById('apiKey').value = cronitorConfig.apiKey;
       }
     }
 
@@ -407,6 +433,37 @@
 
         if (result.success) {
           status.textContent = 'Database Settings saved successfully!';
+          status.classList.remove('text-gray-600', 'text-red-600');
+          status.classList.add('text-green-600');
+        } else {
+          throw new Error(result.error || 'Unknown error');
+        }
+      } catch (error) {
+        status.textContent = `Error: ${error.message}`;
+        status.classList.remove('text-gray-600', 'text-green-600');
+        status.classList.add('text-red-600');
+      }
+      status.classList.remove('hidden');
+      setTimeout(() => status.classList.add('hidden'), 5000);
+    });
+
+    document.getElementById('cronitorForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const status = document.getElementById('cronitorFormStatus');
+      status.textContent = 'Saving...';
+      status.classList.remove('hidden', 'text-red-600', 'text-green-600');
+      status.classList.add('text-gray-600');
+
+      try {
+        const config = {
+          apiKey: document.getElementById('apiKey').value,
+        };
+        const result = await window.electronAPI?.saveCronitorConfig?.(config);
+
+        if (!result) throw new Error('No response from backend');
+
+        if (result.success) {
+          status.textContent = 'Cronitor Settings saved successfully!';
           status.classList.remove('text-gray-600', 'text-red-600');
           status.classList.add('text-green-600');
         } else {

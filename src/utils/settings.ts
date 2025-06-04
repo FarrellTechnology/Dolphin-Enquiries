@@ -50,6 +50,9 @@ class Settings {
             database: '',
             schema: '',
             role: '',
+          },
+          cronitor: {
+            apiKey: ''
           }
         }
       });
@@ -80,6 +83,12 @@ class Settings {
     return config && config.account ? config : null;
   }
 
+  async getCronitorConfig(): Promise<CronitorConfig | null> {
+    await this.initStore();
+    const config = this.store!.get('cronitor');
+    return config && config.apiKey ? config : null;
+  }
+
   async setSMTPConfig(config: SMTPConfig): Promise<void> {
     await this.initStore();
     this.store!.set('smtp', config);
@@ -98,6 +107,11 @@ class Settings {
   async setSnowflakeConfig(config: Snowflake): Promise<void> {
     await this.initStore();
     this.store!.set('snowflake', config);
+  }
+
+  async setCronitorConfig(config: CronitorConfig): Promise<void> {
+    await this.initStore();
+    this.store!.set('cronitor', config);
   }
 
   async hasSMTPConfig(): Promise<boolean> {
@@ -122,6 +136,12 @@ class Settings {
     await this.initStore();
     const config = this.store!.get('snowflake');
     return Boolean(config?.account);
+  }
+
+  async hasCronitorConfig(): Promise<boolean> {
+    await this.initStore();
+    const config = this.store!.get('cronitor');
+    return Boolean(config?.apiKey);
   }
 }
 

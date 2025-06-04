@@ -72,6 +72,7 @@
         "keytar": "^7.9.0",
         "node-schedule": "^2.1.1",
         "nodemailer": "^7.0.3",
+        "p-limit": "^6.2.0",
         "snowflake-sdk": "^2.1.0",
         "ssh2-sftp-client": "^12.0.0"
     }

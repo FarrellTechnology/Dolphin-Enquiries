@@ -11,18 +11,23 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getSMTPConfig: () => ipcRenderer.invoke("get-smtp-config"),
   saveSMTPConfig: (config) => ipcRenderer.invoke("save-smtp-config", config),
 
-  // SFTP1 config
+  // FTP1 config
   getSFTP1Config: () => ipcRenderer.invoke("get-sftp1-config"),
   saveSFTP1Config: (config) => ipcRenderer.invoke("save-sftp1-config", config),
 
-  // SFTP2 config
+  // FTP2 config
   getSFTP2Config: () => ipcRenderer.invoke("get-sftp2-config"),
   saveSFTP2Config: (config) => ipcRenderer.invoke("save-sftp2-config", config),
 
-  // Azure config
+  // Snowflake config
   getSnowflakeConfig: () => ipcRenderer.invoke("get-snowflake-config"),
   saveSnowflakeConfig: (config) =>
     ipcRenderer.invoke("save-snowflake-config", config),
+
+  // Cronitor config
+  getCronitorConfig: () => ipcRenderer.invoke("get-cronitor-config"),
+  saveCronitorConfig: (config) =>
+    ipcRenderer.invoke("save-cronitor-config", config),
 
   // Theme
   onThemeChanged: (callback) => {

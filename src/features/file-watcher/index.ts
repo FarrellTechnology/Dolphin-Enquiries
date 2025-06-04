@@ -1,10 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import { app } from 'electron';
 import { documentsFolder, isRegularFile, settings, TransferClient } from '../../utils';
-const cronitor = require('cronitor')(app.isPackaged ? process.env.PROD_CRONITOR_API_KEY : process.env.PROD_CRONITOR_API_KEY);
-const fileMonitor = new cronitor.Monitor('EFR-Electron-Mover');
-const uploadingMonitor = new cronitor.Monitor('EFR-Electron-Uploading');
+import { ping } from '..';
 
 let isTransferring = false;
 
@@ -39,7 +36,7 @@ export async function watchAndTransferFiles() {
 
     const remotePath = configOne.remotePath || "/";
     const uploadPath = configTwo.uploadPath || "/";
-    const todayFolderName = new Date().toISOString().slice(0, 10).replace(/-/g, ''); // "yyyymmdd"
+    const todayFolderName = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const localPath = path.join(documentsFolder(), "DolphinEnquiries", "completed", todayFolderName);
 
     if (!fs.existsSync(localPath)) {
@@ -60,8 +57,8 @@ export async function watchAndTransferFiles() {
             const isFile = isRegularFile(file);
 
             if (isFile && !transferredFiles.has(fileName)) {
-                fileMonitor.ping({ state: 'run' });
-                uploadingMonitor.ping({ message: fileName });
+                ping('EFR-Electron-Mover', { state: 'run' });
+                ping('EFR-Electron-Uploading', { message: fileName });
                 const remoteFile = `${remotePath}${fileName}`;
                 const localFile = path.join(localPath, fileName);
                 const baseRemotePath = uploadPath;
@@ -92,12 +89,12 @@ export async function watchAndTransferFiles() {
                 logFileMovement(fileName, destRemoteFile, Date.now() - startTime);
                 transferredFiles.add(fileName);
 
-                fileMonitor.ping({ state: 'complete' });
+                ping('EFR-Electron-Mover', { state: 'complete' });
             }
         }
     } catch (err) {
         console.error("File transfer error:", err);
-        fileMonitor.ping({ state: 'fail', message: 'Transfer failed' });
+        ping('EFR-Electron-Mover', { state: 'fail', message: 'Transfer failed' });
     } finally {
         await client1.end();
         await client2.end();

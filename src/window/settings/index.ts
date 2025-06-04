@@ -10,7 +10,7 @@ export async function createSettingsWindow() {
   }
 
   settingsWindow = new BrowserWindow({
-    width: 500,
+    width: 600,
     height: 750,
     show: false,
     resizable: false,
@@ -108,6 +108,21 @@ export function setupSettingsHandlers(ipcMain: Electron.IpcMain) {
     } catch (err: unknown) {
       const error = err as Error;
       dialog.showErrorBox('Error', 'Failed to save Snowflake settings');
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('get-cronitor-config', async () => {
+    return await settings.getCronitorConfig();
+  });
+
+  ipcMain.handle('save-cronitor-config', async (_, config) => {
+    try {
+      await settings.setCronitorConfig(config);
+      return { success: true };
+    } catch (err: unknown) {
+      const error = err as Error;
+      dialog.showErrorBox('Error', 'Failed to save Cronitor settings');
       return { success: false, error: error.message };
     }
   });

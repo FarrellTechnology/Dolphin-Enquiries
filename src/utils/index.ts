@@ -33,10 +33,7 @@ export async function loadEmailTemplate(
   if (perDateCounts.length === 0) {
     return template
       .replace("{{summaryHeading}}", "No enquiries found.")
-      .replace("{{tableRows}}", "")
-      .replace("{{dateHeader}}", "Date")
-      .replace("{{totalLeisure}}", "0")
-      .replace("{{totalGolf}}", "0");
+      .replace("{{showTable}}", "");
   }
 
   const hasMultipleMonths = new Set(
@@ -48,7 +45,6 @@ export async function loadEmailTemplate(
   let tableRows = "";
 
   if (hasMultipleMonths) {
-    // Monthly summary
     const grouped = new Map<string, { leisure: number; golf: number }>();
 
     for (const entry of perDateCounts) {
@@ -65,47 +61,63 @@ export async function loadEmailTemplate(
 
     tableRows = Array.from(grouped.entries()).map(([month, counts]) => `
       <tr>
-        <td style="border: 1px solid #ccc; padding: 8px;">${month}</td>
-        <td style="border: 1px solid #ccc; padding: 8px; text-align: right;">${counts.leisure}</td>
-        <td style="border: 1px solid #ccc; padding: 8px; text-align: right;">${counts.golf}</td>
-        <td style="border: 1px solid #ccc; padding: 8px; text-align: right;">${counts.leisure + counts.golf}</td>
+        <td>${month}</td>
+        <td style="text-align: right;">${counts.leisure}</td>
+        <td style="text-align: right;">${counts.golf}</td>
+        <td style="text-align: right;">${counts.leisure + counts.golf}</td>
       </tr>
     `).join("");
   } else {
-    // Daily breakdown
     summaryHeading = `Daily report for ${format(parseISO(perDateCounts[0].date), "MMMM yyyy")}`;
     dateHeader = "Date";
 
     tableRows = perDateCounts.map(day => `
       <tr>
-        <td style="border: 1px solid #ccc; padding: 8px;">${format(parseISO(day.date), "dd MMM yyyy")}</td>
-        <td style="border: 1px solid #ccc; padding: 8px; text-align: right;">${day.leisureCount}</td>
-        <td style="border: 1px solid #ccc; padding: 8px; text-align: right;">${day.golfCount}</td>
-        <td style="border: 1px solid #ccc; padding: 8px; text-align: right;">${day.leisureCount + day.golfCount}</td>
+        <td>${format(parseISO(day.date), "dd MMM yyyy")}</td>
+        <td style="text-align: right;">${day.leisureCount}</td>
+        <td style="text-align: right;">${day.golfCount}</td>
+        <td style="text-align: right;">${day.leisureCount + day.golfCount}</td>
       </tr>
     `).join("");
   }
 
+  const tableAndTotals = `
+    <table cellpadding="8" cellspacing="0" style="width: 100%; border-collapse: collapse; background: #ffffff; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.05); margin-top: 20px;">
+      <thead style="background-color: #0077cc; color: white;">
+        <tr>
+          <th style="text-align: left; padding: 12px;">${dateHeader}</th>
+          <th style="text-align: right; padding: 12px;">Leisure</th>
+          <th style="text-align: right; padding: 12px;">Golf</th>
+          <th style="text-align: right; padding: 12px;">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${tableRows}
+      </tbody>
+    </table>
+
+    <div style="margin-top: 16px;">
+      <p><strong>Total Leisure:</strong> ${totalLeisure}</p>
+      <p><strong>Total Golf:</strong> ${totalGolf}</p>
+    </div>
+  `;
+
   return template
     .replace("{{summaryHeading}}", summaryHeading)
-    .replace("{{dateHeader}}", dateHeader)
-    .replace("{{tableRows}}", tableRows)
-    .replace("{{totalLeisure}}", totalLeisure.toString())
-    .replace("{{totalGolf}}", totalGolf.toString());
+    .replace("{{showTable}}", tableAndTotals);
 }
 
 export function isRegularFile(file: UnifiedFileInfo): boolean {
-    if (typeof file.type === 'string') {
-        return file.type === '-'; // SFTP
-    }
+  if (typeof file.type === 'string') {
+    return file.type === '-';
+  }
 
-    if (typeof file.type === 'number') {
-        // basic-ftp: sometimes returns type 1 even for files, so fallback on extension
-        const hasExtension = path.extname(file.name).length > 0;
-        return file.type === 0 || hasExtension;
-    }
+  if (typeof file.type === 'number') {
+    const hasExtension = path.extname(file.name).length > 0;
+    return file.type === 0 || hasExtension;
+  }
 
-    return false;
+  return false;
 }
 
 export function getSourceTypeFromFileName(fileName: string): string | null {

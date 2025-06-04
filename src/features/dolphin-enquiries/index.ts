@@ -2,11 +2,21 @@
 import path from "path";
 import fs from "fs/promises";
 import fsSync from "fs";
-import { saveParsedTravelFolder, sendEmail } from "..";
+import { ping, saveParsedTravelFolder, sendEmail } from "..";
 import { getMainWindow, updateTrayTooltip } from "../../window";
 import { assets, documentsFolder, loadEmailTemplate } from "../../utils";
 
+let pLimit: typeof import('p-limit').default;
+
 async function parseFilesAndSendToDatabase(): Promise<Array<{ date: string, leisureCount: number, golfCount: number }>> {
+  if (!pLimit) {
+    pLimit = (await import('p-limit')).default;
+  }
+
+  updateTrayTooltip("Parsing Dolphin Enquiries files...");
+
+  ping('EFR-Electron-DolphinEnquiries', { state: 'run' });
+
   const baseFolder = path.join(documentsFolder(), "DolphinEnquiries", "completed");
 
   if (!fsSync.existsSync(baseFolder)) {
@@ -26,17 +36,27 @@ async function parseFilesAndSendToDatabase(): Promise<Array<{ date: string, leis
     let leisureCount = 0;
     let golfCount = 0;
 
-    const savePromises = files.map(async (file) => {
-      try {
-        const fullPath = path.join(folderPath, file);
-        const xmlContent = await fs.readFile(fullPath, "utf-8");
-        const saved = await saveParsedTravelFolder(xmlContent, file);
-        return { file, saved };
-      } catch (error) {
-        console.error(`Failed to process file ${file}`, error);
-        return { file, saved: false };
-      }
-    });
+    const limit = pLimit(4);
+
+    const savePromises = files.map(file =>
+      limit(async () => {
+        try {
+          const fullPath = path.join(folderPath, file);
+          const xmlContent = await fs.readFile(fullPath, "utf-8");
+          const saved = await saveParsedTravelFolder(xmlContent, file);
+          return { file, saved };
+        } catch (error) {
+          console.error(`Failed to process file ${file}`, error);
+
+          const message =
+            error instanceof Error ? error.message : String(error);
+
+          ping('EFR-Electron-DolphinEnquiries', { state: 'warn', message: `Failed to process file ${file}: ${message}` });
+
+          return { file, saved: false };
+        }
+      })
+    );
 
     const resultsPerFile = await Promise.all(savePromises);
 
@@ -52,6 +72,8 @@ async function parseFilesAndSendToDatabase(): Promise<Array<{ date: string, leis
       results.push({ date, leisureCount, golfCount });
     }
   }
+
+  ping('EFR-Electron-DolphinEnquiries', { state: 'complete' });
 
   return results;
 }
