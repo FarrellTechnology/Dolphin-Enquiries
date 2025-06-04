@@ -1,47 +1,102 @@
+
 import path from "path";
 import fs from "fs/promises";
 import fsSync from "fs";
-import { app } from "electron";
-import { sendEmail } from "..";
-import { assets } from "../../utils";
+import { ping, saveParsedTravelFolder, sendEmail } from "..";
 import { getMainWindow, updateTrayTooltip } from "../../window";
+import { assets, documentsFolder, loadEmailTemplate } from "../../utils";
 
-export async function checkDolphinFiles(): Promise<void> {
-  const documentsFolder = app.getPath("documents");
-  const baseFolder = path.join(documentsFolder, "DolphinEnquiries", "completed");
+let pLimit: typeof import('p-limit').default;
 
-  const yesterday = new Date(Date.now() - 86400000);
-  const formattedDate = yesterday.toLocaleDateString("en-GB").replace(/\//g, "-");
-  const yyyymmdd = yesterday.toISOString().slice(0, 10).replace(/-/g, "");
-  const folderPath = path.join(baseFolder, yyyymmdd);
-
-  if (!fsSync.existsSync(folderPath)) {
-    console.log("Folder does not exist:", folderPath);
-    return;
+async function parseFilesAndSendToDatabase(): Promise<Array<{ date: string, leisureCount: number, golfCount: number }>> {
+  if (!pLimit) {
+    pLimit = (await import('p-limit')).default;
   }
 
-  const files = fsSync.readdirSync(folderPath);
-  const leisureCount = files.filter(f => f.toLowerCase().startsWith("lwc")).length;
-  const golfCount = files.filter(f => f.toLowerCase().startsWith("egr")).length;
+  updateTrayTooltip("Parsing Dolphin Enquiries files...");
 
-  const message = `[${formattedDate}] Leisure Enquiries: ${leisureCount}, Golf Enquiries: ${golfCount}`;
-  updateTrayTooltip(message);
+  ping('EFR-Electron-DolphinEnquiries', { state: 'run' });
 
-  if (getMainWindow()) {
-    getMainWindow()?.loadFile(assets.template('report.html'));
-    getMainWindow()?.webContents.once('did-finish-load', () => {
-      getMainWindow()?.webContents.send('report-data', { formattedDate, leisureCount, golfCount });
-    });
+  const baseFolder = path.join(documentsFolder(), "DolphinEnquiries", "completed");
+
+  if (!fsSync.existsSync(baseFolder)) {
+    console.error("Base folder does not exist:", baseFolder);
+    return [];
   }
 
-  const html = await loadEmailTemplate(formattedDate, leisureCount, golfCount);
-  await sendEmail("Dolphin Enquiries Daily Report", undefined, html);
+  const folderNames = await fs.readdir(baseFolder);
+  const results: Array<{ date: string, leisureCount: number, golfCount: number }> = [];
+
+  for (const folderName of folderNames) {
+    const folderPath = path.join(baseFolder, folderName);
+    const stat = await fs.stat(folderPath);
+    if (!stat.isDirectory() || !/^\d{8}$/.test(folderName)) continue;
+
+    const files = (await fs.readdir(folderPath)).filter(f => f.toLowerCase().endsWith(".xml"));
+    let leisureCount = 0;
+    let golfCount = 0;
+
+    const limit = pLimit(4);
+
+    const savePromises = files.map(file =>
+      limit(async () => {
+        try {
+          const fullPath = path.join(folderPath, file);
+          const xmlContent = await fs.readFile(fullPath, "utf-8");
+          const saved = await saveParsedTravelFolder(xmlContent, file);
+          return { file, saved };
+        } catch (error) {
+          console.error(`Failed to process file ${file}`, error);
+
+          const message =
+            error instanceof Error ? error.message : String(error);
+
+          ping('EFR-Electron-DolphinEnquiries', { state: 'warn', message: `Failed to process file ${file}: ${message}` });
+
+          return { file, saved: false };
+        }
+      })
+    );
+
+    const resultsPerFile = await Promise.all(savePromises);
+
+    for (const { file, saved } of resultsPerFile) {
+      if (saved) {
+        if (file.toLowerCase().startsWith("lwc")) leisureCount++;
+        else if (file.toLowerCase().startsWith("egr")) golfCount++;
+      }
+    }
+
+    if (leisureCount + golfCount > 0) {
+      const date = `${folderName.slice(0, 4)}-${folderName.slice(4, 6)}-${folderName.slice(6)}`;
+      results.push({ date, leisureCount, golfCount });
+    }
+  }
+
+  ping('EFR-Electron-DolphinEnquiries', { state: 'complete' });
+
+  return results;
 }
 
-async function loadEmailTemplate(date: string, leisure: number, golf: number): Promise<string> {
-  const templatePath = assets.template("email-template.html");
-  let template = await fs.readFile(templatePath, "utf-8");
-  return template.replace("{{formattedDate}}", date)
-    .replace("{{leisureCount}}", leisure.toString())
-    .replace("{{golfCount}}", golf.toString());
+export async function checkDolphinFiles(): Promise<void> {
+  let counts: Array<{ date: string; leisureCount: number; golfCount: number }> = [];
+  try {
+    counts = await parseFilesAndSendToDatabase();
+  } catch (err) {
+    console.error("Error saving daily counts:", err);
+    counts = [];
+  }
+
+  updateTrayTooltip("Processed " + counts.length + " day(s)");
+
+  getMainWindow()?.loadFile(assets.template('report.html'));
+  getMainWindow()?.webContents.once('did-finish-load', () => {
+    getMainWindow()?.webContents.send('report-data', { perDateCounts: counts });
+  });
+
+  const totalLeisure = counts.reduce((sum, d) => sum + d.leisureCount, 0);
+  const totalGolf = counts.reduce((sum, d) => sum + d.golfCount, 0);
+  const html = await loadEmailTemplate(counts, totalLeisure, totalGolf);
+
+  await sendEmail("Dolphin Enquiries Report", undefined, html);
 }

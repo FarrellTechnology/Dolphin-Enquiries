@@ -1,7 +1,7 @@
 import { Tray, Menu, nativeImage, nativeTheme } from "electron";
 import { checkDolphinFiles } from "../../features";
 import { assets } from "../../utils";
-import { getMainWindow } from "..";
+import { getMainWindow } from "../main-window";
 import { createSettingsWindow } from "../settings";
 
 let tray: Tray;
@@ -12,9 +12,9 @@ export function setupTray(onQuit: () => void) {
 
   const contextMenu = Menu.buildFromTemplate([
     { label: "Dolphin Enquiries", enabled: false },
-    { label: "Check Files Now", click: () => checkDolphinFiles().catch(console.error) },
+    { label: "Check Dolphin Files Now", click: () => checkDolphinFiles().catch(console.error) },
     { type: "separator" },
-    { label: "SMTP Settings", click: () => createSettingsWindow() },
+    { label: "Settings", click: () => createSettingsWindow() },
     { type: "separator" },
     { label: "Quit", click: onQuit }
   ]);

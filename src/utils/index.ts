@@ -1,5 +1,10 @@
 import path from "path";
+import fs from "fs/promises";
 import { app } from "electron";
+import { format, parseISO } from "date-fns";
+
+export * from "./settings";
+export * from "./transfer-files";
 
 function resolveAppPath(...segments: string[]): string {
   return app.isPackaged
@@ -7,8 +12,118 @@ function resolveAppPath(...segments: string[]): string {
     : path.join(__dirname, "..", "..", "src", "assets", ...segments);
 }
 
+export function documentsFolder(): string {
+  return app.getPath("documents");
+}
+
 export const assets = {
   template: (...segments: string[]) => resolveAppPath("templates", ...segments),
   image: (...segments: string[]) => resolveAppPath("images", ...segments),
   js: (...segments: string[]) => resolveAppPath("js", ...segments),
 };
+
+export async function loadEmailTemplate(
+  perDateCounts: Array<{ date: string; leisureCount: number; golfCount: number }>,
+  totalLeisure: number,
+  totalGolf: number
+): Promise<string> {
+  const templatePath = assets.template("email-template.html");
+  let template = await fs.readFile(templatePath, "utf-8");
+
+  if (perDateCounts.length === 0) {
+    return template
+      .replace("{{summaryHeading}}", "No enquiries found.")
+      .replace("{{showTable}}", "");
+  }
+
+  const hasMultipleMonths = new Set(
+    perDateCounts.map((entry) => format(parseISO(entry.date), "yyyy-MM"))
+  ).size > 1;
+
+  let summaryHeading = "";
+  let dateHeader = "";
+  let tableRows = "";
+
+  if (hasMultipleMonths) {
+    const grouped = new Map<string, { leisure: number; golf: number }>();
+
+    for (const entry of perDateCounts) {
+      const key = format(parseISO(entry.date), "MMMM yyyy");
+      const prev = grouped.get(key) || { leisure: 0, golf: 0 };
+      grouped.set(key, {
+        leisure: prev.leisure + entry.leisureCount,
+        golf: prev.golf + entry.golfCount,
+      });
+    }
+
+    summaryHeading = `Monthly overview for ${grouped.size} month(s)`;
+    dateHeader = "Month";
+
+    tableRows = Array.from(grouped.entries()).map(([month, counts]) => `
+      <tr>
+        <td>${month}</td>
+        <td style="text-align: right;">${counts.leisure}</td>
+        <td style="text-align: right;">${counts.golf}</td>
+        <td style="text-align: right;">${counts.leisure + counts.golf}</td>
+      </tr>
+    `).join("");
+  } else {
+    summaryHeading = `Daily report for ${format(parseISO(perDateCounts[0].date), "MMMM yyyy")}`;
+    dateHeader = "Date";
+
+    tableRows = perDateCounts.map(day => `
+      <tr>
+        <td>${format(parseISO(day.date), "dd MMM yyyy")}</td>
+        <td style="text-align: right;">${day.leisureCount}</td>
+        <td style="text-align: right;">${day.golfCount}</td>
+        <td style="text-align: right;">${day.leisureCount + day.golfCount}</td>
+      </tr>
+    `).join("");
+  }
+
+  const tableAndTotals = `
+    <table cellpadding="8" cellspacing="0" style="width: 100%; border-collapse: collapse; background: #ffffff; border-radius: 6px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.05); margin-top: 20px;">
+      <thead style="background-color: #0077cc; color: white;">
+        <tr>
+          <th style="text-align: left; padding: 12px;">${dateHeader}</th>
+          <th style="text-align: right; padding: 12px;">Leisure</th>
+          <th style="text-align: right; padding: 12px;">Golf</th>
+          <th style="text-align: right; padding: 12px;">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${tableRows}
+      </tbody>
+    </table>
+
+    <div style="margin-top: 16px;">
+      <p><strong>Total Leisure:</strong> ${totalLeisure}</p>
+      <p><strong>Total Golf:</strong> ${totalGolf}</p>
+    </div>
+  `;
+
+  return template
+    .replace("{{summaryHeading}}", summaryHeading)
+    .replace("{{showTable}}", tableAndTotals);
+}
+
+export function isRegularFile(file: UnifiedFileInfo): boolean {
+  if (typeof file.type === 'string') {
+    return file.type === '-';
+  }
+
+  if (typeof file.type === 'number') {
+    const hasExtension = path.extname(file.name).length > 0;
+    return file.type === 0 || hasExtension;
+  }
+
+  return false;
+}
+
+export function getSourceTypeFromFileName(fileName: string): string | null {
+  if (!fileName) return null;
+  const lower = fileName.toLowerCase();
+  if (lower.startsWith('egr')) return 'EGR';
+  if (lower.startsWith('lwc')) return 'LWC';
+  return null;
+}

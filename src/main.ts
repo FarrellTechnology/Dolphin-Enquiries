@@ -1,10 +1,6 @@
-import dotenv from "dotenv";
-dotenv.config();
-
 import { app, Menu, ipcMain } from "electron";
-import { enableAutoLaunch, setupAutoUpdater, setupScheduler, checkDolphinFiles, } from "./features";
-import { createMainWindow, setIsQuitting, setupTray } from "./window";
-import { setupSettingsHandlers } from "./window/settings";
+import { enableAutoLaunch, setupAutoUpdater, setupScheduler, checkDolphinFiles, watchAndTransferFiles } from "./features";
+import { createMainWindow, setIsQuitting, setupSettingsHandlers, setupTray } from "./window";
 
 app.whenReady().then(async () => {
   await enableAutoLaunch();
@@ -18,9 +14,14 @@ app.whenReady().then(async () => {
     app.quit();
   });
 
-  setupScheduler(checkDolphinFiles);
+  setupScheduler(
+    { task: checkDolphinFiles, schedule: '0 1 * * *' },  // runs at 1:00 AM
+    { task: watchAndTransferFiles, schedule: '*/5 * * * * *' } // runs every 5 seconds
+  );
 
-  if (app.isPackaged) checkDolphinFiles();
+  if (app.isPackaged) {
+    checkDolphinFiles();
+  }
 });
 
 app.on("window-all-closed", (e: { preventDefault: () => void; }) => {

@@ -1,39 +1,99 @@
-  <!DOCTYPE html>
-  <html lang="en" data-theme="light">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Report - Dolphin Enquiries</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-  </head>
-  <body class="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-6 font-sans">
-    <h2 class="text-2xl font-bold mb-4">Dolphin Enquiries Daily Report</h2>
-    <p id="date" class="mb-4">Date: ...</p>
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
 
-    <table class="border border-gray-300 dark:border-gray-600 rounded w-80">
-      <thead>
-        <tr class="bg-gray-200 dark:bg-gray-700">
-          <th class="text-left px-4 py-2">Category</th>
-          <th class="text-right px-4 py-2">Enquiries Submitted</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td class="border-t border-gray-300 dark:border-gray-600 px-4 py-2">Leisure</td>
-          <td id="leisure-count" class="border-t border-gray-300 dark:border-gray-600 text-right px-4 py-2">...</td>
-        </tr>
-        <tr>
-          <td class="border-t border-gray-300 dark:border-gray-600 px-4 py-2">Golf</td>
-          <td id="golf-count" class="border-t border-gray-300 dark:border-gray-600 text-right px-4 py-2">...</td>
-        </tr>
-      </tbody>
-    </table>
+<head>
+  <meta charset="UTF-8" />
+  <title>Report - Dolphin Enquiries</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
 
-    <script>
-      window.electronAPI.onReportData(({ formattedDate, leisureCount, golfCount }) => {
-        document.getElementById('date').textContent = `Date: ${formattedDate}`;
-        document.getElementById('leisure-count').textContent = leisureCount;
-        document.getElementById('golf-count').textContent = golfCount;
+<body class="bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 p-6 font-sans">
+  <h2 class="text-2xl font-bold mb-4">Dolphin Enquiries Report</h2>
+  <p id="summary" class="mb-4">Loading summary...</p>
+
+  <table class="border border-gray-300 dark:border-gray-600 rounded w-full max-w-2xl">
+    <thead>
+      <tr class="bg-gray-200 dark:bg-gray-700">
+        <th class="text-left px-4 py-2" id="date-header">Date</th>
+        <th class="text-right px-4 py-2">Leisure</th>
+        <th class="text-right px-4 py-2">Golf</th>
+        <th class="text-right px-4 py-2">Total</th>
+      </tr>
+    </thead>
+    <tbody id="report-body">
+    </tbody>
+  </table>
+
+  <script>
+    window.electronAPI.onReportData((report) => {
+      const body = document.getElementById('report-body');
+      body.innerHTML = '';
+
+      const parseDate = (str) => new Date(str);
+
+      const monthsSet = new Set();
+      report.perDateCounts.forEach(({ date }) => {
+        const d = parseDate(date);
+        const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        monthsSet.add(monthKey);
       });
-    </script>
-  </body>
-  </html>
+
+      const months = Array.from(monthsSet);
+      const isMultiMonth = months.length > 1;
+
+      let totalLeisure = 0;
+      let totalGolf = 0;
+
+      if (isMultiMonth) {
+        document.getElementById('date-header').textContent = 'Month';
+
+        const monthlyMap = new Map();
+
+        report.perDateCounts.forEach(({ date, leisureCount, golfCount }) => {
+          const d = parseDate(date);
+          const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+
+          if (!monthlyMap.has(monthKey)) {
+            monthlyMap.set(monthKey, { leisureCount: 0, golfCount: 0 });
+          }
+
+          const agg = monthlyMap.get(monthKey);
+          agg.leisureCount += leisureCount;
+          agg.golfCount += golfCount;
+        });
+
+        for (const [month, counts] of monthlyMap.entries()) {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td class="border-t border-gray-300 dark:border-gray-600 px-4 py-2">${month}</td>
+            <td class="border-t border-gray-300 dark:border-gray-600 text-right px-4 py-2">${counts.leisureCount}</td>
+            <td class="border-t border-gray-300 dark:border-gray-600 text-right px-4 py-2">${counts.golfCount}</td>
+            <td class="border-t border-gray-300 dark:border-gray-600 text-right px-4 py-2">${counts.leisureCount + counts.golfCount}</td>
+          `;
+          body.appendChild(row);
+
+          totalLeisure += counts.leisureCount;
+          totalGolf += counts.golfCount;
+        }
+      } else {
+        report.perDateCounts.forEach(({ date, leisureCount, golfCount }) => {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td class="border-t border-gray-300 dark:border-gray-600 px-4 py-2">${date}</td>
+            <td class="border-t border-gray-300 dark:border-gray-600 text-right px-4 py-2">${leisureCount}</td>
+            <td class="border-t border-gray-300 dark:border-gray-600 text-right px-4 py-2">${golfCount}</td>
+            <td class="border-t border-gray-300 dark:border-gray-600 text-right px-4 py-2">${leisureCount + golfCount}</td>
+          `;
+          body.appendChild(row);
+
+          totalLeisure += leisureCount;
+          totalGolf += golfCount;
+        });
+      }
+
+      document.getElementById('summary').textContent = `Processed ${report.perDateCounts.length} enquiries — Total Leisure: ${totalLeisure}, Golf: ${totalGolf}`;
+    });
+  </script>
+</body>
+
+</html>
