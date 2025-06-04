@@ -1,6 +1,3 @@
-import dotenv from "dotenv";
-dotenv.config();
-
 import { app, Menu, ipcMain } from "electron";
 import { enableAutoLaunch, setupAutoUpdater, setupScheduler, checkDolphinFiles, watchAndTransferFiles } from "./features";
 import { createMainWindow, setIsQuitting, setupSettingsHandlers, setupTray } from "./window";
