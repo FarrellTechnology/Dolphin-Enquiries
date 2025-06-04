@@ -97,6 +97,22 @@ export function setupSettingsHandlers(ipcMain: Electron.IpcMain) {
     }
   });
 
+  
+  ipcMain.handle('get-sftp3-config', async () => {
+    return await settings.getSFTPConfigThree();
+  });
+
+  ipcMain.handle('save-sftp3-config', async (_, config) => {
+    try {
+      await settings.setSFTPConfigThree(config);
+      return { success: true };
+    } catch (err: unknown) {
+      const error = err as Error;
+      dialog.showErrorBox('Error', 'Failed to save SFTP Three settings');
+      return { success: false, error: error.message };
+    }
+  });
+
   ipcMain.handle('get-snowflake-config', async () => {
     return await settings.getSnowflakeConfig();
   });

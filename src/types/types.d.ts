@@ -34,6 +34,7 @@ type StoreSchema = {
     smtp: SMTPConfig;
     sftpOne: FTPConfig;
     sftpTwo: FTPConfig;
+    sftpThree: FTPConfig;
     snowflake: Snowflake;
     cronitor: CronitorConfig;
 }

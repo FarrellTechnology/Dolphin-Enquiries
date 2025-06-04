@@ -42,6 +42,13 @@ class Settings {
             password: '',
             uploadPath: '',
           },
+          sftpThree: {
+            host: '',
+            port: 22,
+            username: '',
+            password: '',
+            uploadPath: '',
+          },
           snowflake: {
             account: '',
             username: '',
@@ -77,6 +84,12 @@ class Settings {
     return config && config.host ? config : null;
   }
 
+  async getSFTPConfigThree(): Promise<FTPConfig | null> {
+    await this.initStore();
+    const config = this.store!.get('sftpThree');
+    return config && config.host ? config : null;
+  }
+
   async getSnowflakeConfig(): Promise<Snowflake | null> {
     await this.initStore();
     const config = this.store!.get('snowflake');
@@ -104,6 +117,11 @@ class Settings {
     this.store!.set('sftpTwo', config);
   }
 
+  async setSFTPConfigThree(config: FTPConfig): Promise<void> {
+    await this.initStore();
+    this.store!.set('sftpThree', config);
+  }
+
   async setSnowflakeConfig(config: Snowflake): Promise<void> {
     await this.initStore();
     this.store!.set('snowflake', config);
@@ -129,6 +147,12 @@ class Settings {
   async hasSFTPConfigTwo(): Promise<boolean> {
     await this.initStore();
     const config = this.store!.get('sftpTwo');
+    return Boolean(config?.host);
+  }
+
+  async hasSFTPConfigThree(): Promise<boolean> {
+    await this.initStore();
+    const config = this.store!.get('sftpThree');
     return Boolean(config?.host);
   }
 
