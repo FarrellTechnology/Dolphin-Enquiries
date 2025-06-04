@@ -18,10 +18,6 @@ app.whenReady().then(async () => {
     { task: checkDolphinFiles, schedule: '0 1 * * *' },  // runs at 1:00 AM
     { task: watchAndTransferFiles, schedule: '*/5 * * * * *' } // runs every 5 seconds
   );
-
-  if (app.isPackaged) {
-    checkDolphinFiles();
-  }
 });
 
 app.on("window-all-closed", (e: { preventDefault: () => void; }) => {
