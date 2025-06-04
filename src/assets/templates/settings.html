@@ -322,7 +322,7 @@
         document.getElementById('sftp2RemotePath').value = sftp2Config.remotePath;
       }
 
-      const sftp3Config = await window.electronAPI?.getSFTP2Config?.();
+      const sftp3Config = await window.electronAPI?.getSFTP3Config?.();
       if (sftp3Config) {
         document.getElementById('sftp3Host').value = sftp3Config.host;
         document.getElementById('sftp3Port').value = sftp3Config.port;
