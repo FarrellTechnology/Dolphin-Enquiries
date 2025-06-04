@@ -37,11 +37,13 @@ export async function createSettingsWindow() {
   const smtpConfig = await settings.getSMTPConfig();
   const sftp1Config = await settings.getSFTPConfigOne();
   const sftp2Config = await settings.getSFTPConfigTwo();
+  const sftp3Config = await settings.getSFTPConfigThree();
   const snowflakeConfig = await settings.getSnowflakeConfig();
   settingsWindow.webContents.on('did-finish-load', () => {
     settingsWindow?.webContents.send('smtp-config', smtpConfig);
     settingsWindow?.webContents.send('sftp1-config', sftp1Config);
     settingsWindow?.webContents.send('sftp2-config', sftp2Config);
+    settingsWindow?.webContents.send('sftp3-config', sftp3Config);
     settingsWindow?.webContents.send('snowflake-config', snowflakeConfig);
     settingsWindow?.webContents.send('theme-changed', nativeTheme.shouldUseDarkColors ? 'dark' : 'light');
   });
@@ -97,7 +99,6 @@ export function setupSettingsHandlers(ipcMain: Electron.IpcMain) {
     }
   });
 
-  
   ipcMain.handle('get-sftp3-config', async () => {
     return await settings.getSFTPConfigThree();
   });
