@@ -139,16 +139,6 @@ export async function saveParsedTravelFolder(xmlString: string, fileName: string
       surname: p.PersonName?.Surname || null,
     }));
 
-const csvLine = `"${fileName.replace(/"/g, '""')}",${passengers.length}\n`;
-  const csvPath = path.resolve("parsed_passengers_report.csv");
-
-  // If file doesn't exist, write headers first
-  if (!fs.existsSync(csvPath)) {
-    fs.writeFileSync(csvPath, 'filename,passenger_count\n', { flag: 'wx' });
-  }
-  // Append the line (filename, number_of_passengers)
-  fs.appendFileSync(csvPath, csvLine);
-
   const marketing: Marketing = {
     campaign_code: travelFolder.MarketingCampaignCode ?? null,
     source: travelFolder.EnhancedData01 ?? null,

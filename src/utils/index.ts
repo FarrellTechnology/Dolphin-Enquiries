@@ -60,7 +60,7 @@ export async function loadEmailTemplate(
       });
     }
 
-    summaryHeading = `Monthly overview for ${grouped.size} enquiries`;
+    summaryHeading = `Monthly overview for ${grouped.size} month(s)`;
     dateHeader = "Month";
 
     tableRows = Array.from(grouped.entries()).map(([month, counts]) => `
