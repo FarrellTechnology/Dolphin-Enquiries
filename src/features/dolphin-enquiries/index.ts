@@ -4,15 +4,9 @@ import fs from "fs/promises";
 import fsSync from "fs";
 import { ping, saveParsedTravelFolder, sendEmail } from "..";
 import { getMainWindow, updateTrayTooltip } from "../../window";
-import { assets, documentsFolder, loadEmailTemplate } from "../../utils";
-
-let pLimit: typeof import('p-limit').default;
+import { assets, documentsFolder, loadEmailTemplate, runWithConcurrencyLimit } from "../../utils";
 
 async function parseFilesAndSendToDatabase(): Promise<Array<{ date: string, leisureCount: number, golfCount: number }>> {
-  if (!pLimit) {
-    pLimit = (await import('p-limit')).default;
-  }
-
   updateTrayTooltip("Parsing Dolphin Enquiries files...");
 
   ping('EFR-Electron-DolphinEnquiries', { state: 'run' });
@@ -36,29 +30,24 @@ async function parseFilesAndSendToDatabase(): Promise<Array<{ date: string, leis
     let leisureCount = 0;
     let golfCount = 0;
 
-    const limit = pLimit(4);
+    // Use custom concurrency limiter instead of p-limit
+    const resultsPerFile = await runWithConcurrencyLimit(files, 4, async (file) => {
+      try {
+        const fullPath = path.join(folderPath, file);
+        const xmlContent = await fs.readFile(fullPath, "utf-8");
+        const saved = await saveParsedTravelFolder(xmlContent, file);
+        return { file, saved };
+      } catch (error) {
+        console.error(`Failed to process file ${file}`, error);
 
-    const savePromises = files.map(file =>
-      limit(async () => {
-        try {
-          const fullPath = path.join(folderPath, file);
-          const xmlContent = await fs.readFile(fullPath, "utf-8");
-          const saved = await saveParsedTravelFolder(xmlContent, file);
-          return { file, saved };
-        } catch (error) {
-          console.error(`Failed to process file ${file}`, error);
+        const message =
+          error instanceof Error ? error.message : String(error);
 
-          const message =
-            error instanceof Error ? error.message : String(error);
+        ping('EFR-Electron-DolphinEnquiries', { state: 'warn', message: `Failed to process file ${file}: ${message}` });
 
-          ping('EFR-Electron-DolphinEnquiries', { state: 'warn', message: `Failed to process file ${file}: ${message}` });
-
-          return { file, saved: false };
-        }
-      })
-    );
-
-    const resultsPerFile = await Promise.all(savePromises);
+        return { file, saved: false };
+      }
+    });
 
     for (const { file, saved } of resultsPerFile) {
       if (saved) {
