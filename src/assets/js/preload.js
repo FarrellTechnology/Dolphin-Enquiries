@@ -19,6 +19,10 @@ contextBridge.exposeInMainWorld("electronAPI", {
   getSFTP2Config: () => ipcRenderer.invoke("get-sftp2-config"),
   saveSFTP2Config: (config) => ipcRenderer.invoke("save-sftp2-config", config),
 
+  // FTP3 config
+  getSFTP3Config: () => ipcRenderer.invoke("get-sftp3-config"),
+  saveSFTP3Config: (config) => ipcRenderer.invoke("save-sftp3-config", config),
+
   // Snowflake config
   getSnowflakeConfig: () => ipcRenderer.invoke("get-snowflake-config"),
   saveSnowflakeConfig: (config) =>

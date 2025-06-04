@@ -17,7 +17,7 @@
 
     <!-- Tabs -->
     <div class="mb-6 border-b border-gray-300 dark:border-gray-700">
-      <nav class="flex space-x-4" aria-label="Tabs" id="tabs">
+      <nav class="flex flex-wrap space-x-4" aria-label="Tabs" id="tabs">
         <button
           class="py-2 px-4 border-b-2 border-blue-600 dark:border-blue-400 font-semibold text-blue-600 dark:text-blue-400 focus:outline-none"
           data-tab="smtp" type="button">
@@ -26,12 +26,17 @@
         <button
           class="py-2 px-4 border-b-2 border-transparent hover:border-gray-300 dark:hover:border-gray-600 text-gray-600 dark:text-gray-400 focus:outline-none"
           data-tab="sftp1" type="button">
-          SFTP One
+          SFTP One (Origin)
         </button>
         <button
           class="py-2 px-4 border-b-2 border-transparent hover:border-gray-300 dark:hover:border-gray-600 text-gray-600 dark:text-gray-400 focus:outline-none"
           data-tab="sftp2" type="button">
-          SFTP Two
+          SFTP Two (Origin)
+        </button>
+        <button
+          class="py-2 px-4 border-b-2 border-transparent hover:border-gray-300 dark:hover:border-gray-600 text-gray-600 dark:text-gray-400 focus:outline-none"
+          data-tab="sftp2" type="button">
+          SFTP Three (Destination)
         </button>
         <button
           class="py-2 px-4 border-b-2 border-transparent hover:border-gray-300 dark:hover:border-gray-600 text-gray-600 dark:text-gray-400 focus:outline-none"
@@ -155,8 +160,8 @@
             class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
         </div>
         <div>
-          <label for="sftp2UploadPath" class="block text-sm font-medium mb-1">Upload Path</label>
-          <input type="text" id="sftp2UploadPath" name="sftp2UploadPath" required
+          <label for="sftp2RemotePath" class="block text-sm font-medium mb-1">Remote Path</label>
+          <input type="text" id="sftp2RemotePath" name="sftp2RemotePath" required
             class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
         </div>
         <div class="pt-4">
@@ -168,6 +173,41 @@
         <div id="sftp2Status" class="mt-2 text-sm text-center hidden"></div>
       </form>
 
+      <!-- SFTP Three Form -->
+      <form id="sftp3Form" class="space-y-4 tab-content hidden" data-tab-content="sftp3">
+        <div>
+          <label for="sftp3Host" class="block text-sm font-medium mb-1">SFTP Host</label>
+          <input type="text" id="sftp3Host" name="sftp3Host" required
+            class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
+        </div>
+        <div>
+          <label for="sftp3Port" class="block text-sm font-medium mb-1">Port</label>
+          <input type="number" id="sftp3Port" name="sftp3Port" required
+            class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
+        </div>
+        <div>
+          <label for="sftp3User" class="block text-sm font-medium mb-1">Username</label>
+          <input type="text" id="sftp3User" name="sftp3User" required
+            class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
+        </div>
+        <div>
+          <label for="sftp3Pass" class="block text-sm font-medium mb-1">Password</label>
+          <input type="password" id="sftp3Pass" name="sftp3Pass" required
+            class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
+        </div>
+        <div>
+          <label for="sftp3UploadPath" class="block text-sm font-medium mb-1">Upload Path</label>
+          <input type="text" id="sftp3UploadPath" name="sftp3UploadPath" required
+            class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
+        </div>
+        <div class="pt-4">
+          <button type="submit"
+            class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors">
+            Save SFTP Three Settings
+          </button>
+        </div>
+        <div id="sftp2Status" class="mt-2 text-sm text-center hidden"></div>
+      </form>
       <!-- Snowflake Form -->
       <form id="snowflakeForm" class="space-y-4 tab-content hidden" data-tab-content="snowflake">
         <div>
@@ -279,7 +319,16 @@
         document.getElementById('sftp2Port').value = sftp2Config.port;
         document.getElementById('sftp2User').value = sftp2Config.username;
         document.getElementById('sftp2Pass').value = sftp2Config.password;
-        document.getElementById('sftp2UploadPath').value = sftp2Config.uploadPath;
+        document.getElementById('sftp2RemotePath').value = sftp2Config.remotePath;
+      }
+
+      const sftp3Config = await window.electronAPI?.getSFTP2Config?.();
+      if (sftp3Config) {
+        document.getElementById('sftp3Host').value = sftp3Config.host;
+        document.getElementById('sftp3Port').value = sftp3Config.port;
+        document.getElementById('sftp3User').value = sftp3Config.username;
+        document.getElementById('sftp3Pass').value = sftp3Config.password;
+        document.getElementById('sftp3UploadPath').value = sftp3Config.uploadPath;
       }
 
       const databaseConfig = await window.electronAPI?.getSnowflakeConfig?.();
@@ -388,7 +437,7 @@
           port: parseInt(document.getElementById('sftp2Port').value),
           username: document.getElementById('sftp2User').value,
           password: document.getElementById('sftp2Pass').value,
-          uploadPath: document.getElementById('sftp2UploadPath').value,
+          remotePath: document.getElementById('sftp2RemotePath').value,
         };
         const result = await window.electronAPI?.saveSFTP2Config?.(config);
 
@@ -396,6 +445,41 @@
 
         if (result.success) {
           status.textContent = 'SFTP Two Settings saved successfully!';
+          status.classList.remove('text-gray-600', 'text-red-600');
+          status.classList.add('text-green-600');
+        } else {
+          throw new Error(result.error || 'Unknown error');
+        }
+      } catch (error) {
+        status.textContent = `Error: ${error.message}`;
+        status.classList.remove('text-gray-600', 'text-green-600');
+        status.classList.add('text-red-600');
+      }
+      status.classList.remove('hidden');
+      setTimeout(() => status.classList.add('hidden'), 5000);
+    });
+
+    document.getElementById('sftp3Form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const status = document.getElementById('sftp3Status');
+      status.textContent = 'Saving...';
+      status.classList.remove('hidden', 'text-red-600', 'text-green-600');
+      status.classList.add('text-gray-600');
+
+      try {
+        const config = {
+          host: document.getElementById('sftp3Host').value,
+          port: parseInt(document.getElementById('sftp3Port').value),
+          username: document.getElementById('sftp3User').value,
+          password: document.getElementById('sftp3Pass').value,
+          uploadPath: document.getElementById('sftp3UploadPath').value,
+        };
+        const result = await window.electronAPI?.saveSFTP3Config?.(config);
+
+        if (!result) throw new Error('No response from backend');
+
+        if (result.success) {
+          status.textContent = 'SFTP Three Settings saved successfully!';
           status.classList.remove('text-gray-600', 'text-red-600');
           status.classList.add('text-green-600');
         } else {

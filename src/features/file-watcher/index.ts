@@ -22,20 +22,25 @@ function logFileMovement(fileName: string, destinationFolder: string, timeTaken:
 export async function watchAndTransferFiles() {
     const configOne = await settings.getSFTPConfigOne();
     const configTwo = await settings.getSFTPConfigTwo();
+    const configThree = await settings.getSFTPConfigThree();
 
-    if (!configOne || !configTwo) {
+    if (!configOne || !configTwo || !configThree) {
         console.error("SFTP configurations are not set up correctly.");
         return;
     }
 
     const client1 = new TransferClient(configOne);
     const client2 = new TransferClient(configTwo);
+    const client3 = new TransferClient(configThree);
 
     await client1.connect();
     await client2.connect();
+    await client3.connect();
 
-    const remotePath = configOne.remotePath || "/";
-    const uploadPath = configTwo.uploadPath || "/";
+    const remotePath1 = configOne.remotePath || "/";
+    const remotePath2 = configTwo.remotePath || "/";
+    const uploadPath3 = configThree.uploadPath || "/";
+
     const todayFolderName = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const localPath = path.join(documentsFolder(), "DolphinEnquiries", "completed", todayFolderName);
 
@@ -49,55 +54,62 @@ export async function watchAndTransferFiles() {
     isTransferring = true;
 
     try {
-        const fileList = await client1.list(remotePath);
-        console.debug(`Found ${fileList.length} files in source directory`);
+        async function transferFilesFromClient(client: TransferClient, sourceRemotePath: string) {
+            const fileList = await client.list(sourceRemotePath);
+            console.debug(`Found ${fileList.length} files in source directory ${sourceRemotePath}`);
 
-        for (const file of fileList) {
-            const fileName = file.name;
-            const isFile = isRegularFile(file);
+            for (const file of fileList) {
+                const fileName = file.name;
+                const isFile = isRegularFile(file);
 
-            if (isFile && !transferredFiles.has(fileName)) {
-                ping('EFR-Electron-Mover', { state: 'run' });
-                ping('EFR-Electron-Uploading', { message: fileName });
-                const remoteFile = `${remotePath}${fileName}`;
-                const localFile = path.join(localPath, fileName);
-                const baseRemotePath = uploadPath;
+                if (isFile && !transferredFiles.has(fileName)) {
+                    ping('EFR-Electron-Mover', { state: 'run' });
+                    ping('EFR-Electron-Uploading', { message: fileName });
 
-                let destFolder = baseRemotePath;
+                    const remoteFile = `${sourceRemotePath}${fileName}`;
+                    const localFile = path.join(localPath, fileName);
+                    let destFolder = uploadPath3;
 
-                if (fileName.toLowerCase().startsWith('egr')) {
-                    destFolder = path.posix.join(baseRemotePath, 'XML-EGR/');
-                } else if (fileName.toLowerCase().startsWith('lwc')) {
-                    destFolder = path.posix.join(baseRemotePath, 'XML-LWC/');
+                    if (fileName.toLowerCase().startsWith('egr')) {
+                        destFolder = path.posix.join(destFolder, 'XML-EGR/');
+                    } else if (fileName.toLowerCase().startsWith('lwc')) {
+                        destFolder = path.posix.join(destFolder, 'XML-LWC/');
+                    }
+
+                    if (!destFolder.endsWith('/')) destFolder += '/';
+
+                    const destRemoteFile = destFolder + fileName;
+
+                    const startTime = Date.now();
+
+                    await client.get(remoteFile, localFile);
+                    console.debug(`Downloaded ${fileName} from ${sourceRemotePath}`);
+
+                    await client.delete(remoteFile);
+                    console.debug(`Deleted source file ${fileName} from ${sourceRemotePath}`);
+
+                    await client3.put(localFile, destRemoteFile);
+                    console.debug(`Uploaded ${fileName} to client3 at ${destRemoteFile}`);
+
+                    logFileMovement(fileName, destRemoteFile, Date.now() - startTime);
+                    transferredFiles.add(fileName);
+
+                    ping('EFR-Electron-Mover', { state: 'complete' });
                 }
-
-                if (!destFolder.endsWith('/')) destFolder += '/';
-
-                const destRemoteFile = destFolder + fileName;
-
-                const startTime = Date.now();
-
-                await client1.get(remoteFile, localFile);
-                console.debug(`Downloaded ${fileName}`);
-
-                await client1.delete(remoteFile);
-                console.debug(`Deleted source file ${fileName}`);
-
-                await client2.put(localFile, destRemoteFile);
-                console.debug(`Uploaded ${fileName} to destination`);
-
-                logFileMovement(fileName, destRemoteFile, Date.now() - startTime);
-                transferredFiles.add(fileName);
-
-                ping('EFR-Electron-Mover', { state: 'complete' });
             }
         }
+
+        await transferFilesFromClient(client1, remotePath1);
+
+        await transferFilesFromClient(client2, remotePath2);
+
     } catch (err) {
         console.error("File transfer error:", err);
         ping('EFR-Electron-Mover', { state: 'fail', message: 'Transfer failed' });
     } finally {
         await client1.end();
         await client2.end();
+        await client3.end();
         isTransferring = false;
     }
 }
