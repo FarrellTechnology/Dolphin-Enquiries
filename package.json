@@ -1,6 +1,6 @@
 {
     "name": "dolphin-enquiries-tray",
-    "version": "1.0.9",
+    "version": "1.0.10",
     "main": "dist/main.js",
     "description": "A simple Electron app to send email notifications for Dolphin Enquiries.",
     "author": {
@@ -27,7 +27,6 @@
             }
         ],
         "asarUnpack": [
-            "**/p-limit/**",
             "**/preload.js",
             "**/*.node"
         ],
@@ -71,7 +70,6 @@
         "keytar": "^7.9.0",
         "node-schedule": "^2.1.1",
         "nodemailer": "^7.0.3",
-        "p-limit": "^6.2.0",
         "snowflake-sdk": "^2.1.0",
         "ssh2-sftp-client": "^12.0.0"
     }

@@ -127,3 +127,28 @@ export function getSourceTypeFromFileName(fileName: string): string | null {
   if (lower.startsWith('lwc')) return 'LWC';
   return null;
 }
+
+export async function runWithConcurrencyLimit<T>(
+  items: T[],
+  limit: number,
+  asyncFn: (item: T) => Promise<any>
+) {
+  const results: any[] = [];
+  let i = 0;
+
+  async function runner() {
+    while (i < items.length) {
+      const currentIndex = i++;
+      results[currentIndex] = await asyncFn(items[currentIndex]);
+    }
+  }
+
+  const runners = [];
+  for (let j = 0; j < limit; j++) {
+    runners.push(runner());
+  }
+
+  await Promise.all(runners);
+
+  return results;
+}
