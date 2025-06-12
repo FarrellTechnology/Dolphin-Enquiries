@@ -6,6 +6,21 @@ import { ping, saveParsedTravelFolder, sendEmail } from "..";
 import { getMainWindow, updateTrayTooltip } from "../../window";
 import { assets, documentsFolder, loadEmailTemplate, runWithConcurrencyLimit } from "../../utils";
 
+function isWithinPastNDays(folderName: string, days: number): boolean {
+  if (!/^\d{8}$/.test(folderName)) return false;
+
+  const year = parseInt(folderName.slice(0, 4), 10);
+  const month = parseInt(folderName.slice(4, 6), 10) - 1;
+  const day = parseInt(folderName.slice(6, 8), 10);
+
+  const folderDate = new Date(year, month, day);
+  const today = new Date();
+  const cutoff = new Date();
+  cutoff.setDate(today.getDate() - days);
+
+  return folderDate >= cutoff && folderDate <= today;
+}
+
 async function parseFilesAndSendToDatabase(): Promise<Array<{ date: string, leisureCount: number, golfCount: number }>> {
   updateTrayTooltip("Parsing Dolphin Enquiries files...");
 
@@ -24,7 +39,7 @@ async function parseFilesAndSendToDatabase(): Promise<Array<{ date: string, leis
   for (const folderName of folderNames) {
     const folderPath = path.join(baseFolder, folderName);
     const stat = await fs.stat(folderPath);
-    if (!stat.isDirectory() || !/^\d{8}$/.test(folderName)) continue;
+    if (!stat.isDirectory() || !isWithinPastNDays(folderName, 10)) continue;
 
     const files = (await fs.readdir(folderPath)).filter(f => f.toLowerCase().endsWith(".xml"));
     let leisureCount = 0;

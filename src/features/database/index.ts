@@ -51,8 +51,9 @@ async function query(conn: snowflake.Connection, sql: string, binds: any[] = [])
 function logTravelFolderProcessing(
   fileName: string,
   status: "SUCCESS" | "FAILED" | "SKIPPED",
-  timeTaken: number
-) {
+  timeTaken: number,
+  errorMessage?: string
+): void {
   const logDir = path.join(documentsFolder(), "DolphinEnquiries", "logs", "snowflake");
   const logFile = path.join(logDir, `${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.txt`);
 
@@ -60,10 +61,19 @@ function logTravelFolderProcessing(
     fs.mkdirSync(logDir, { recursive: true });
   }
 
-  const logEntry = `${new Date().toLocaleTimeString()} - ${fileName} - ${status} - ${timeTaken}ms\n`;
+  let logEntry = `${new Date().toLocaleTimeString()} - ${fileName} - ${status} - ${timeTaken}ms`;
+
+  if (errorMessage && status === "FAILED") {
+    const sanitizedError = errorMessage.replace(/\s+/g, ' ').substring(0, 500);
+    logEntry += ` - ERROR: ${sanitizedError}`;
+  }
+
+  logEntry += `\n`;
 
   fs.appendFile(logFile, logEntry, (err) => {
-    if (err) console.error('Failed to write log', err);
+    if (err) {
+      console.error(`Failed to write log: ${err}`);
+    }
   });
 }
 
@@ -281,7 +291,8 @@ export async function saveParsedTravelFolder(xmlString: string, fileName: string
 
   } catch (e) {
     const timeTaken = Date.now() - startTime;
-    logTravelFolderProcessing(fileName, "FAILED", timeTaken);
+    const errorMessage = e instanceof Error ? e.message : String(e);
+    logTravelFolderProcessing(fileName, "FAILED", timeTaken, errorMessage);
     console.error('Failed to save parsed travel folder:', e);
     return false;
   }

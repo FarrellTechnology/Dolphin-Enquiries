@@ -91,7 +91,7 @@ export async function watchAndTransferFiles() {
                     await client3.put(localFile, destRemoteFile);
                     console.debug(`Uploaded ${fileName} to client3 at ${destRemoteFile}`);
 
-                    logFileMovement(fileName, destRemoteFile, Date.now() - startTime);
+                    logFileMovement(fileName, destFolder, Date.now() - startTime);
                     transferredFiles.add(fileName);
 
                     ping('EFR-Electron-Mover', { state: 'complete' });
