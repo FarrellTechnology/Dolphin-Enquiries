@@ -45,7 +45,6 @@ async function parseFilesAndSendToDatabase(): Promise<Array<{ date: string, leis
     let leisureCount = 0;
     let golfCount = 0;
 
-    // Use custom concurrency limiter instead of p-limit
     const resultsPerFile = await runWithConcurrencyLimit(files, 4, async (file) => {
       try {
         const fullPath = path.join(folderPath, file);
