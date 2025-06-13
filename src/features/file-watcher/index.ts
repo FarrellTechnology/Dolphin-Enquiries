@@ -53,6 +53,8 @@ export async function watchAndTransferFiles() {
     if (isTransferring) return;
     isTransferring = true;
 
+    let currentFile: string | null = null;
+
     try {
         async function transferFilesFromClient(client: TransferClient, sourceRemotePath: string) {
             const fileList = await client.list(sourceRemotePath);
@@ -63,6 +65,8 @@ export async function watchAndTransferFiles() {
                 const isFile = isRegularFile(file);
 
                 if (isFile && !transferredFiles.has(fileName)) {
+                    currentFile = fileName;
+
                     ping('EFR-Electron-Mover', { state: 'run' });
                     ping('EFR-Electron-Uploading', { message: fileName });
 
@@ -79,7 +83,6 @@ export async function watchAndTransferFiles() {
                     if (!destFolder.endsWith('/')) destFolder += '/';
 
                     const destRemoteFile = destFolder + fileName;
-
                     const startTime = Date.now();
 
                     await client.get(remoteFile, localFile);
@@ -95,17 +98,23 @@ export async function watchAndTransferFiles() {
                     transferredFiles.add(fileName);
 
                     ping('EFR-Electron-Mover', { state: 'complete' });
+
+                    currentFile = null;
                 }
             }
         }
 
         await transferFilesFromClient(client1, remotePath1);
-
         await transferFilesFromClient(client2, remotePath2);
 
     } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
         console.error("File transfer error:", err);
-        ping('EFR-Electron-Mover', { state: 'fail', message: 'Transfer failed' });
+
+        ping('EFR-Electron-Mover', {
+            state: 'fail',
+            message: `Transfer failed${currentFile ? ` for file "${currentFile}"` : ''}: ${errorMessage}`
+        });
     } finally {
         await client1.end();
         await client2.end();
