@@ -35,14 +35,29 @@ async function initDbConnection() {
   return connection;
 }
 
-async function query(conn: snowflake.Connection, sql: string, binds: any[] = []): Promise<any[]> {
+async function query(conn: snowflake.Connection, sql: string, binds: any[] = [], retry = true): Promise<any[]> {
   return new Promise((resolve, reject) => {
     conn.execute({
       sqlText: sql,
       binds,
-      complete: (err, stmt, rows) => {
-        if (err) reject(err);
-        else resolve(rows || []);
+      complete: async (err, stmt, rows) => {
+        if (err) {
+          const isTerminated = /terminated connection/i.test(err.message);
+          if (isTerminated && retry) {
+            console.warn('Snowflake connection was terminated. Reconnecting...');
+            connection = null;
+            try {
+              const newConn = await initDbConnection();
+              const result = await query(newConn, sql, binds, false);
+              return resolve(result);
+            } catch (retryErr) {
+              return reject(retryErr);
+            }
+          }
+          return reject(err);
+        } else {
+          resolve(rows || []);
+        }
       },
     });
   });

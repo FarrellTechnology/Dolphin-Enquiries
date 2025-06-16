@@ -1,4 +1,5 @@
 import { Tray, Menu, nativeImage, nativeTheme } from "electron";
+import { autoUpdater } from "electron-updater";
 import { checkDolphinFiles } from "../../features";
 import { assets } from "../../utils";
 import { getMainWindow } from "../main-window";
@@ -15,6 +16,7 @@ export function setupTray(onQuit: () => void) {
     { label: "Check Dolphin Files Now", click: () => checkDolphinFiles().catch(console.error) },
     { type: "separator" },
     { label: "Settings", click: () => createSettingsWindow() },
+    { label: "Check for Updates", click: () => autoUpdater.checkForUpdates() },
     { type: "separator" },
     { label: "Quit", click: onQuit }
   ]);
