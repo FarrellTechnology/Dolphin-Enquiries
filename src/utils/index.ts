@@ -122,10 +122,9 @@ export function isRegularFile(file: UnifiedFileInfo): boolean {
 
 export function getSourceTypeFromFileName(fileName: string): string | null {
   if (!fileName) return null;
-  const lower = fileName.toLowerCase();
-  if (lower.startsWith('egr')) return 'EGR';
-  if (lower.startsWith('lwc')) return 'LWC';
-  return null;
+
+  const match = fileName.match(/egr|lwc/i);
+  return match ? match[0].toUpperCase() : null;
 }
 
 export async function runWithConcurrencyLimit<T>(
