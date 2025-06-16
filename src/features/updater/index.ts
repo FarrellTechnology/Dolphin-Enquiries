@@ -4,6 +4,7 @@ import { app, dialog } from "electron";
 export function setupAutoUpdater(): void {
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.disableWebInstaller = true;
 
   if (app.isPackaged) {
     autoUpdater.checkForUpdates();
