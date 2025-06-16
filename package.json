@@ -1,6 +1,6 @@
 {
     "name": "dolphin-enquiries-tray",
-    "version": "1.0.18",
+    "version": "1.0.19",
     "main": "dist/main.js",
     "description": "A simple Electron app to send email notifications for Dolphin Enquiries.",
     "author": {
@@ -38,6 +38,9 @@
             "icon": "src/assets/images/company-icon.ico",
             "artifactName": "Dolphin.Enquiries.Setup.${version}.${ext}",
             "requestedExecutionLevel": "asInvoker"
+        },
+        "nsis": {
+            "differentialPackage": false
         },
         "publish": {
             "provider": "github",
