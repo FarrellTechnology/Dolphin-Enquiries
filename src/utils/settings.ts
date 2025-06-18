@@ -68,8 +68,11 @@ class Settings {
             password: '*fHpkQ2M4in35^',
             options: {
               trustServerCertificate: true,
-              encrypt: true
-            }
+              encrypt: true,
+              authentication: {
+                type: 'default'
+              }
+            },
           }
         }
       });
@@ -115,6 +118,8 @@ class Settings {
   async getMsSQLConfig(): Promise<MsSQLConfig | null> {
     await this.initStore();
     const config = this.store!.get('mssql');
+    if (!config.options) config.options = { trustServerCertificate: true, encrypt: true, authentication: { type: 'default' } };
+    if (!config.options.authentication) config.options.authentication = { type: 'default' };
     return config && config.server ? config : null;
   }
 

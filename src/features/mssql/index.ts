@@ -43,6 +43,7 @@ async function connect() {
     }
 
     config = await settings.getMsSQLConfig();
+
     if (!config) throw new Error('MsSQL config is missing');
 
     connection = await sql.connect(config);
