@@ -30,6 +30,10 @@ type CronitorConfig = {
     apiKey: string;
 }
 
+type MsSQLAuthentication = {
+    type: string,
+}
+
 type MsSQLConfig = {
     server: string,
     database: string,
@@ -37,8 +41,9 @@ type MsSQLConfig = {
     password: string,
     options: {
         trustServerCertificate: boolean,
-        encrypt: boolean
-    }
+        encrypt: boolean,
+        authentication: MsSQLAuthentication
+    },
 }
 
 type StoreSchema = {
