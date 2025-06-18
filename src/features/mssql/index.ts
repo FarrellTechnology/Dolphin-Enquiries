@@ -5,10 +5,23 @@ import { format } from '@fast-csv/format';
 import { documentsFolder, initDbConnection } from '../../utils';
 import { Connection } from 'snowflake-sdk';
 
-const sqlConfig = {
+let connection: sql.ConnectionPool | null = null;
+
+const sqlConfig: sql.config = {
     server: 'localhost',
     database: 'EFR',
-    options: { trustServerCertificate: true }
+    options: {
+        trustServerCertificate: true,
+        encrypt: false,
+    },
+    authentication: {
+        type: 'ntlm' as const,
+        options: {
+            domain: '',
+            userName: '',
+            password: '',
+        }
+    }
 }; //TODO: Add to settings and make it so it's global to never repeat
 
 function logMigrationStatus(
@@ -40,8 +53,18 @@ function logMigrationStatus(
     });
 }
 
+async function connect() {
+    if (connection) {
+        return connection;
+    }
+
+    connection = await sql.connect(sqlConfig);
+
+    return connection;
+}
+
 async function exportTableToCSV(tableName: string, outputPath: string, sqlConfig: any) {
-    const pool = await sql.connect(sqlConfig);
+    const pool = await connect();
     const result = await pool.request().query(`SELECT * FROM ${tableName}`);
     await pool.close();
 
