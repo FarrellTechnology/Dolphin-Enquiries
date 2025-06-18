@@ -143,4 +143,19 @@ export function setupSettingsHandlers(ipcMain: Electron.IpcMain) {
       return { success: false, error: error.message };
     }
   });
+
+  ipcMain.handle('get-mssql-config', async () => {
+    return await settings.getMsSQLConfig();
+  });
+
+  ipcMain.handle('save-mssql-config', async (_, config) => {
+    try {
+      await settings.setMsSQLConfig(config);
+      return { success: true };
+    } catch (err: unknown) {
+      const error = err as Error;
+      dialog.showErrorBox('Error', 'Failed to save MSSQL settings');
+      return { success: false, error: error.message };
+    }
+  });
 }

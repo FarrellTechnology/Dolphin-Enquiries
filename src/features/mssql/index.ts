@@ -2,27 +2,11 @@ import sql from 'mssql';
 import fs from 'fs-extra';
 import path from 'path';
 import { format } from '@fast-csv/format';
-import { documentsFolder, initDbConnection } from '../../utils';
+import { documentsFolder, initDbConnection, settings } from '../../utils';
 import { Connection } from 'snowflake-sdk';
 
 let connection: sql.ConnectionPool | null = null;
-
-const sqlConfig: sql.config = {
-    server: 'localhost',
-    database: 'EFR',
-    options: {
-        trustServerCertificate: true,
-        encrypt: false,
-    },
-    authentication: {
-        type: 'ntlm' as const,
-        options: {
-            domain: '',
-            userName: '',
-            password: '',
-        }
-    }
-}; //TODO: Add to settings and make it so it's global to never repeat
+let config: any = null;
 
 function logMigrationStatus(
     tableName: string,
@@ -58,12 +42,15 @@ async function connect() {
         return connection;
     }
 
-    connection = await sql.connect(sqlConfig);
+    config = await settings.getMsSQLConfig();
+
+    if (!config) throw new Error('MsSQL config is missing');
+    connection = await sql.connect(config);
 
     return connection;
 }
 
-async function exportTableToCSV(tableName: string, outputPath: string, sqlConfig: any) {
+async function exportTableToCSV(tableName: string, outputPath: string) {
     const pool = await connect();
     const result = await pool.request().query(`SELECT * FROM ${tableName}`);
     await pool.close();
@@ -78,7 +65,7 @@ async function exportTableToCSV(tableName: string, outputPath: string, sqlConfig
 }
 
 async function getAllTables() {
-    const pool = await sql.connect(sqlConfig);
+    const pool = await connect();
 
     const query = `
     SELECT TABLE_SCHEMA, TABLE_NAME 
@@ -134,7 +121,7 @@ export async function getAllDataIntoSnowflake() {
         const startTime = Date.now();
 
         try {
-            await exportTableToCSV(tableName, outputPath, sqlConfig);
+            await exportTableToCSV(tableName, outputPath);
             await uploadAndCopyCSV(tableName, csvPath, conn);
             const timeTaken = Date.now() - startTime;
             logMigrationStatus(tableName, "SUCCESS", timeTaken);

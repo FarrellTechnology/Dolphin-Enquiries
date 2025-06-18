@@ -60,6 +60,22 @@ class Settings {
           },
           cronitor: {
             apiKey: ''
+          },
+          mssql: {
+            server: 'localhost',
+            database: 'EFR',
+            options: {
+              trustServerCertificate: true,
+              encrypt: false,
+            },
+            authentication: {
+              type: 'ntlm' as const,
+              options: {
+                domain: 'WINDOWS-SERVER0',
+                userName: 'EFR_ReadOnlyUser',
+                password: '*fHpkQ2M4in35^',
+              }
+            }
           }
         }
       });
@@ -102,6 +118,12 @@ class Settings {
     return config && config.apiKey ? config : null;
   }
 
+  async getMsSQLConfig(): Promise<MsSQLConfig | null> {
+    await this.initStore();
+    const config = this.store!.get('mssql');
+    return config && config.server ? config : null;
+  }
+
   async setSMTPConfig(config: SMTPConfig): Promise<void> {
     await this.initStore();
     this.store!.set('smtp', config);
@@ -130,6 +152,11 @@ class Settings {
   async setCronitorConfig(config: CronitorConfig): Promise<void> {
     await this.initStore();
     this.store!.set('cronitor', config);
+  }
+
+  async setMsSQLConfig(config: MsSQLConfig): Promise<void> {
+    await this.initStore();
+    this.store!.set('mssql', config);
   }
 
   async hasSMTPConfig(): Promise<boolean> {
@@ -166,6 +193,12 @@ class Settings {
     await this.initStore();
     const config = this.store!.get('cronitor');
     return Boolean(config?.apiKey);
+  }
+
+  async hasMsSQLConfig(): Promise<boolean> {
+    await this.initStore();
+    const config = this.store!.get('mssql');
+    return Boolean(config?.server);
   }
 }
 

@@ -30,6 +30,23 @@ type CronitorConfig = {
     apiKey: string;
 }
 
+type MsSQLConfig = {
+    server: string,
+    database: string,
+    options: {
+        trustServerCertificate: boolean,
+        encrypt: boolean,
+    },
+    authentication: {
+        type: string,
+        options: {
+            domain: string,
+            userName: string,
+            password: string,
+        }
+    }
+}
+
 type StoreSchema = {
     smtp: SMTPConfig;
     sftpOne: FTPConfig;
@@ -37,6 +54,7 @@ type StoreSchema = {
     sftpThree: FTPConfig;
     snowflake: Snowflake;
     cronitor: CronitorConfig;
+    mssql: MsSQLConfig;
 }
 
 type ScheduledTask = {
@@ -93,14 +111,14 @@ type Marketing = {
 type UnifiedFileInfo = SftpFileInfo | FtpFileInfo;
 
 type CronitorPingInput = {
-  state?: 'run' | 'start' | 'complete' | 'fail' | 'warn';
-  message?: string;
+    state?: 'run' | 'start' | 'complete' | 'fail' | 'warn';
+    message?: string;
 };
 
 type CronitorMonitor = {
-  ping: (input: CronitorPingInput) => void;
+    ping: (input: CronitorPingInput) => void;
 };
 
 type CronitorModule = {
-  Monitor: new (name: string) => CronitorMonitor;
+    Monitor: new (name: string) => CronitorMonitor;
 };
