@@ -64,17 +64,11 @@ class Settings {
           mssql: {
             server: 'localhost',
             database: 'EFR',
+            user: 'EFR_ReadOnlyUser',
+            password: '*fHpkQ2M4in35^',
             options: {
               trustServerCertificate: true,
-              encrypt: false,
-            },
-            authentication: {
-              type: 'ntlm' as const,
-              options: {
-                domain: 'WINDOWS-SERVER0',
-                userName: 'EFR_ReadOnlyUser',
-                password: '*fHpkQ2M4in35^',
-              }
+              encrypt: false
             }
           }
         }

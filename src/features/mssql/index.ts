@@ -43,8 +43,8 @@ async function connect() {
     }
 
     config = await settings.getMsSQLConfig();
-
     if (!config) throw new Error('MsSQL config is missing');
+
     connection = await sql.connect(config);
 
     return connection;
@@ -114,7 +114,7 @@ export async function getAllDataIntoSnowflake() {
     const conn = await initDbConnection();
     const outputPath = './tmp_csvs';
 
-    await batchRun(tables, 10, async (table) => {
+    await batchRun(tables, 4, async (table) => {
         const tableName = `${table.TABLE_SCHEMA}.${table.TABLE_NAME}`;
         const csvPath = `${outputPath}/${tableName}.csv`;
 
