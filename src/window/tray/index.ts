@@ -1,6 +1,5 @@
-import { Tray, Menu, nativeImage, nativeTheme } from "electron";
-import { autoUpdater } from "electron-updater";
-import { checkDolphinFiles } from "../../features";
+import { Tray, nativeTheme, nativeImage, Menu, autoUpdater } from "electron";
+import { checkDolphinFiles, getAllDataIntoSnowflake } from "../../features";
 import { assets } from "../../utils";
 import { getMainWindow } from "../main-window";
 import { createSettingsWindow } from "../settings";
@@ -14,6 +13,7 @@ export function setupTray(onQuit: () => void) {
   const contextMenu = Menu.buildFromTemplate([
     { label: "Dolphin Enquiries", enabled: false },
     { label: "Check Dolphin Files Now", click: () => checkDolphinFiles().catch(console.error) },
+    { label: "Upload MsSQL Files", click: () => getAllDataIntoSnowflake().catch(console.error) },
     { type: "separator" },
     { label: "Settings", click: () => createSettingsWindow() },
     { label: "Check for Updates", click: () => autoUpdater.checkForUpdates() },

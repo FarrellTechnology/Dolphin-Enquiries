@@ -21,7 +21,7 @@ function isWithinPastNDays(folderName: string, days: number): boolean {
   return folderDate >= cutoff && folderDate <= today;
 }
 
-async function parseFilesAndSendToDatabase(): Promise<Array<{ date: string, leisureCount: number, golfCount: number }>> {
+async function parseFilesAndSendToDatabase(howLong: number): Promise<Array<{ date: string, leisureCount: number, golfCount: number }>> {
   updateTrayTooltip("Parsing Dolphin Enquiries files...");
 
   ping('EFR-Electron-DolphinEnquiries', { state: 'run' });
@@ -39,7 +39,7 @@ async function parseFilesAndSendToDatabase(): Promise<Array<{ date: string, leis
   for (const folderName of folderNames) {
     const folderPath = path.join(baseFolder, folderName);
     const stat = await fs.stat(folderPath);
-    if (!stat.isDirectory() || !isWithinPastNDays(folderName, 10)) continue;
+    if (!stat.isDirectory() || !isWithinPastNDays(folderName, howLong)) continue;
 
     const files = (await fs.readdir(folderPath)).filter(f => f.toLowerCase().endsWith(".xml"));
     let leisureCount = 0;
@@ -81,10 +81,10 @@ async function parseFilesAndSendToDatabase(): Promise<Array<{ date: string, leis
   return results;
 }
 
-export async function checkDolphinFiles(): Promise<void> {
+export async function checkDolphinFiles(howLong: number = 10): Promise<void> {
   let counts: Array<{ date: string; leisureCount: number; golfCount: number }> = [];
   try {
-    counts = await parseFilesAndSendToDatabase();
+    counts = await parseFilesAndSendToDatabase(howLong);
   } catch (err) {
     console.error("Error saving daily counts:", err);
     counts = [];

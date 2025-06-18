@@ -5,6 +5,7 @@ import { format, parseISO } from "date-fns";
 
 export * from "./settings";
 export * from "./transfer-files";
+export * from "./snowflake";
 
 function resolveAppPath(...segments: string[]): string {
   return app.isPackaged
