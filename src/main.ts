@@ -16,7 +16,7 @@ app.whenReady().then(async () => {
 
   setupScheduler(
     { task: checkDolphinFiles, schedule: '0 1 * * *' },  // runs at 1:00 AM
-    { task: getAllDataIntoSnowflake, schedule: '0 2 * * *' },  // runs at 2:00 AM
+    // { task: getAllDataIntoSnowflake, schedule: '0 2 * * *' },  // runs at 2:00 AM
     { task: watchAndTransferFiles, schedule: '*/5 * * * * *' } // runs every 5 seconds
   );
 });
