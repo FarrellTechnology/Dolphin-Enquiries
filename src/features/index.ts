@@ -3,6 +3,7 @@ export * from "./database";
 export * from "./dolphin-enquiries";
 export * from "./file-watcher";
 export * from "./mailer";
+export * from "./mssql";
 export * from "./scheduler";
 export * from "./updater";
 export * from "./cronitor";
