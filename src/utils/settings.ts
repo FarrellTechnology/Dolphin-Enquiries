@@ -62,16 +62,13 @@ class Settings {
             apiKey: ''
           },
           mssql: {
-            server: 'localhost',
-            database: 'EFR',
-            user: 'EFR_ReadOnlyUser',
-            password: '*fHpkQ2M4in35^',
+            server: '',
+            database: '',
+            user: '',
+            password: '',
             options: {
               trustServerCertificate: true,
-              encrypt: true,
-              authentication: {
-                type: 'default'
-              }
+              encrypt: false,
             },
           }
         }
@@ -118,8 +115,6 @@ class Settings {
   async getMsSQLConfig(): Promise<MsSQLConfig | null> {
     await this.initStore();
     const config = this.store!.get('mssql');
-    if (!config.options) config.options = { trustServerCertificate: true, encrypt: true, authentication: { type: 'default' } };
-    if (!config.options.authentication) config.options.authentication = { type: 'default' };
     return config && config.server ? config : null;
   }
 

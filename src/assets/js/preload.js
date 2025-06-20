@@ -33,6 +33,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
   saveCronitorConfig: (config) =>
     ipcRenderer.invoke("save-cronitor-config", config),
 
+  // Ms SQL config
+  getMsSQLConfig: () => ipcRenderer.invoke("get-mssql-config"),
+  saveMsSQLConfig: (config) =>
+    ipcRenderer.invoke("save-mssql-config", config),
+
   // Theme
   onThemeChanged: (callback) => {
     ipcRenderer.on("theme-changed", (_, theme) => callback(theme));
