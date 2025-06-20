@@ -161,7 +161,7 @@ export async function getAllDataIntoSnowflake() {
     const conn = await initDbConnection(true);
     const outputPath = './tmp_csvs';
 
-    await batchRun(tables, 4, async (table, index) => {
+    await batchRun(tables, 2, async (table, index) => {
         console.log(`Migrating table ${index + 1} of ${tables.length}: ${table.TABLE_SCHEMA}.${table.TABLE_NAME}`);
 
         const mssqlSchema = table.TABLE_SCHEMA;
