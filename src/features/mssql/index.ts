@@ -51,17 +51,37 @@ async function connect() {
 
 async function exportTableToCSV(schema: string, tableName: string, outputPath: string) {
     const pool = await connect();
-    const fullTableName = `[${schema}].[${tableName}]`;  // MSSQL schema-qualified table name
-    const result = await pool.request().query(`SELECT * FROM ${fullTableName}`);
+    const fullTableName = `[${schema}].[${tableName}]`;
+    const outputFile = `${outputPath}/${tableName}.csv`;
 
     await fs.ensureDir(outputPath);
-    const ws = fs.createWriteStream(`${outputPath}/${tableName}.csv`);
+    const ws = fs.createWriteStream(outputFile);
     const csvStream = format({ headers: true });
-
     csvStream.pipe(ws);
-    result.recordset.forEach(row => csvStream.write(fixTimestampFormat(row)));
-    csvStream.end();
+
+    const request = pool.request();
+    request.stream = true;
+
+    return new Promise<void>((resolve, reject) => {
+        request.query(`SELECT * FROM ${fullTableName}`);
+
+        request.on('row', (row) => {
+            csvStream.write(fixTimestampFormat(row));
+        });
+
+        request.on('error', (err) => {
+            csvStream.end();
+            ws.close();
+            reject(err);
+        });
+
+        request.on('done', () => {
+            csvStream.end();
+            resolve();
+        });
+    });
 }
+
 
 async function getAllTables() {
     const pool = await connect();
