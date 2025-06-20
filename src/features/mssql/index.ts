@@ -133,7 +133,7 @@ async function doesTableExistInSnowflake(conn: Connection, tableName: string): P
             sqlText: query,
             complete: (err, stmt, rows) => {
                 if (err) return reject(err);
-                const exists = !!(rows && rows[0] && rows[0].COUNT === 1);
+                const exists = rows?.[0] && Object.values(rows[0])[0] === 1;
                 resolve(exists);
             }
         });
@@ -175,6 +175,7 @@ async function batchRun<T>(
     for (let i = 0; i < items.length; i += batchSize) {
         const batch = items.slice(i, i + batchSize);
         await Promise.all(batch.map((item, idx) => fn(item, i + idx)));
+        global.gc?.(); // Explicit garbage collection
     }
 }
 
@@ -184,7 +185,7 @@ export async function getAllDataIntoSnowflake() {
     const conn = await initDbConnection(true);
     const outputPath = './tmp_csvs';
 
-    await batchRun(tables, 4, async (table, index) => {
+    await batchRun(tables, 10, async (table, index) => {
         console.log(`Migrating table ${index + 1} of ${tables.length}: ${table.TABLE_SCHEMA}.${table.TABLE_NAME}`);
 
         const mssqlSchema = table.TABLE_SCHEMA;
@@ -216,6 +217,8 @@ export async function getAllDataIntoSnowflake() {
         } catch (error) {
             const timeTaken = Date.now() - startTime;
             logMigrationStatus(`PUBLIC.${snowflakeTableName}`, "FAILED", timeTaken, (error as Error).message);
+        } finally {
+            await fs.remove(csvPath)
         }
     });
 

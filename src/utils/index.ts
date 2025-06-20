@@ -187,14 +187,26 @@ export function fixTimestampFormat(obj: Record<string, any>): Record<string, any
     const result: Record<string, any> = {};
     for (const key in obj) {
         const val = obj[key];
+
         if (val instanceof Date) {
-            result[key] = val.toISOString(); // ISO 8601
-        } else if (typeof val === 'string' && val.includes('GMT')) {
-            const d = new Date(val);
-            result[key] = isNaN(d.getTime()) ? val : d.toISOString();
+            // Format as Snowflake-compatible timestamp
+            result[key] = val.toISOString().replace('T', ' ').replace('Z', '');
+        } else if (typeof val === 'string') {
+            if (val.includes('GMT')) {
+                const d = new Date(val);
+                result[key] = isNaN(d.getTime())
+                    ? val
+                    : d.toISOString().replace('T', ' ').replace('Z', '');
+            } else if (/^\d{4}-\d{2}-\d{2}T/.test(val)) {
+                // ISO string, possibly from DB
+                result[key] = val.replace('T', ' ').replace('Z', '');
+            } else {
+                result[key] = val;
+            }
         } else {
             result[key] = val;
         }
     }
     return result;
 }
+
