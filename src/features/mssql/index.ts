@@ -4,6 +4,7 @@ import path from 'path';
 import { format } from '@fast-csv/format';
 import { documentsFolder, fixTimestampFormat, initDbConnection, mapMSSQLTypeToSnowflakeType, settings } from '../../utils';
 import { Connection } from 'snowflake-sdk';
+import * as csvSplitStream from 'csv-split-stream';
 
 let connection: sql.ConnectionPool | null = null;
 let config: any = null;
@@ -100,26 +101,70 @@ async function getAllTables() {
 }
 
 async function uploadAndCopyCSV(tableName: string, filePath: string, conn: Connection): Promise<void> {
-    const stage = '@~'; // User stage
-    const fileName = path.basename(filePath);
+    const stage = '@~';
+    const splitDir = path.join(path.dirname(filePath), `${path.basename(filePath, '.csv')}_parts`);
+    await fs.ensureDir(splitDir);
 
-    await new Promise<void>((resolve, reject) => {
-        conn.execute({
-            sqlText: `PUT file://${filePath} ${stage} OVERWRITE = TRUE`,
-            complete: (err) => (err ? reject(err) : resolve()),
-        });
-    });
+    const CHUNK_SIZE_MB = 100;
 
-    await new Promise<void>((resolve, reject) => {
-        conn.execute({
-            sqlText: `COPY INTO ${tableName} FROM ${stage}/${fileName} FILE_FORMAT = (TYPE = 'CSV' FIELD_OPTIONALLY_ENCLOSED_BY='"' SKIP_HEADER=1)`,
-            complete: (err) => (err ? reject(err) : resolve()),
+    const stats = await fs.stat(filePath);
+    const totalSizeMB = stats.size / (1024 * 1024);
+
+    if (totalSizeMB > CHUNK_SIZE_MB) {
+        console.log(`Splitting large CSV (${totalSizeMB.toFixed(1)}MB)...`);
+        await csvSplitStream.split(
+            fs.createReadStream(filePath),
+            {
+                lineLimit: 1000000,
+            },
+            (index: number) => fs.createWriteStream(path.join(splitDir, `part_${index}.csv`))
+        );
+
+        const chunkFiles = (await fs.readdir(splitDir)).filter(f => f.endsWith('.csv'));
+
+        for (const chunkFile of chunkFiles) {
+            const chunkPath = path.join(splitDir, chunkFile);
+            const stageFile = `${stage}/${chunkFile}`;
+
+            await new Promise<void>((resolve, reject) => {
+                conn.execute({
+                    sqlText: `PUT file://${chunkPath} ${stage} OVERWRITE = TRUE`,
+                    complete: (err) => (err ? reject(err) : resolve()),
+                });
+            });
+
+            await new Promise<void>((resolve, reject) => {
+                conn.execute({
+                    sqlText: `COPY INTO ${tableName} FROM '${stageFile}' FILE_FORMAT = (TYPE = 'CSV' FIELD_OPTIONALLY_ENCLOSED_BY='"' SKIP_HEADER=1)`,
+                    complete: (err) => (err ? reject(err) : resolve()),
+                });
+            });
+
+            await fs.remove(chunkPath);
+        }
+
+        await fs.remove(splitDir);
+    } else {
+        const fileName = path.basename(filePath);
+
+        await new Promise<void>((resolve, reject) => {
+            conn.execute({
+                sqlText: `PUT file://${filePath} ${stage} OVERWRITE = TRUE`,
+                complete: (err) => (err ? reject(err) : resolve()),
+            });
         });
-    });
+
+        await new Promise<void>((resolve, reject) => {
+            conn.execute({
+                sqlText: `COPY INTO ${tableName} FROM ${stage}/${fileName} FILE_FORMAT = (TYPE = 'CSV' FIELD_OPTIONALLY_ENCLOSED_BY='"' SKIP_HEADER=1)`,
+                complete: (err) => (err ? reject(err) : resolve()),
+            });
+        });
+    }
 }
 
 async function doesTableExistInSnowflake(conn: Connection, tableName: string): Promise<boolean> {
-    const schema = 'PUBLIC'; // always use PUBLIC
+    const schema = 'PUBLIC';
     const name = tableName;
     const query = `
         SELECT COUNT(*) AS count
@@ -154,7 +199,6 @@ async function generateCreateTableSQL(tableSchema: string, tableName: string): P
         const snowflakeType = mapMSSQLTypeToSnowflakeType(col.DATA_TYPE);
         const maxLen = col.CHARACTER_MAXIMUM_LENGTH;
 
-        // Detect if maxLen indicates VARCHAR(MAX) or similar
         const isMaxLength = maxLen === -1 || maxLen === 2147483647;
 
         const typeWithLength = ['VARCHAR', 'CHAR'].includes(snowflakeType)
@@ -175,7 +219,7 @@ async function batchRun<T>(
     for (let i = 0; i < items.length; i += batchSize) {
         const batch = items.slice(i, i + batchSize);
         await Promise.all(batch.map((item, idx) => fn(item, i + idx)));
-        global.gc?.(); // Explicit garbage collection
+        global.gc?.();
     }
 }
 
