@@ -289,7 +289,7 @@
             class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
         </div>
         <div>
-          <label for="mssqlUsername" class="block text-sm font-medium mb-1">User</label>
+          <label for="mssqlUsername" class="block text-sm font-medium mb-1">Username</label>
           <input type="text" id="mssqlUsername" name="mssqlUsername" required
             class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
         </div>
@@ -400,8 +400,8 @@
         document.getElementById('mssqlDatabase').value = mssqlConfig.database;
         document.getElementById('mssqlUsername').value = mssqlConfig.user;
         document.getElementById('mssqlPassword').value = mssqlConfig.password;
-        document.getElementById('mssqlTrustServerCertificate').value = mssqlConfig.options.trustServerCertificate;
-        document.getElementById('mssqlEncrypt').value = mssqlConfig.options.encrypt;
+        document.getElementById('mssqlTrustServerCertificate').checked = mssqlConfig.options.trustServerCertificate;
+        document.getElementById('mssqlEncrypt').checked = mssqlConfig.options.encrypt;
       }
     }
 
@@ -630,7 +630,7 @@
         const config = {
           server: document.getElementById('mssqlServer').value,
           database: document.getElementById('mssqlDatabase').value,
-          username: document.getElementById('mssqlUsername').value,
+          user: document.getElementById('mssqlUsername').value,
           password: document.getElementById('mssqlPassword').value,
           options: {
             trustServerCertificate: document.getElementById('mssqlTrustServerCertificate').checked,
