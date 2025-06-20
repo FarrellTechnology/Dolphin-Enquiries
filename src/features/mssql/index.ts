@@ -130,8 +130,13 @@ async function generateCreateTableSQL(tableSchema: string, tableName: string): P
     const columns = result.recordset.map(col => {
         const snowflakeType = mapMSSQLTypeToSnowflakeType(col.DATA_TYPE);
         const maxLen = col.CHARACTER_MAXIMUM_LENGTH;
-        const typeWithLength = ['VARCHAR', 'CHAR'].includes(snowflakeType) && maxLen > 0 && maxLen !== -1
-            ? `${snowflakeType}(${maxLen})` : snowflakeType;
+
+        // Detect if maxLen indicates VARCHAR(MAX) or similar
+        const isMaxLength = maxLen === -1 || maxLen === 2147483647;
+
+        const typeWithLength = ['VARCHAR', 'CHAR'].includes(snowflakeType)
+            ? (isMaxLength ? `${snowflakeType}(16777216)` : `${snowflakeType}(${maxLen})`)
+            : snowflakeType;
 
         return `"${col.COLUMN_NAME}" ${typeWithLength}`;
     });
@@ -142,24 +147,27 @@ async function generateCreateTableSQL(tableSchema: string, tableName: string): P
 async function batchRun<T>(
     items: T[],
     batchSize: number,
-    fn: (item: T) => Promise<void>
+    fn: (item: T, index: number) => Promise<void>
 ) {
     for (let i = 0; i < items.length; i += batchSize) {
         const batch = items.slice(i, i + batchSize);
-        await Promise.all(batch.map(fn));
+        await Promise.all(batch.map((item, idx) => fn(item, i + idx)));
     }
 }
 
 export async function getAllDataIntoSnowflake() {
     const tables = await getAllTables();
+    console.log(`Total tables found: ${tables.length}`);
     const conn = await initDbConnection(true);
     const outputPath = './tmp_csvs';
 
-    await batchRun(tables, 4, async (table) => {
+    await batchRun(tables, 4, async (table, index) => {
+        console.log(`Migrating table ${index + 1} of ${tables.length}: ${table.TABLE_SCHEMA}.${table.TABLE_NAME}`);
+
         const mssqlSchema = table.TABLE_SCHEMA;
         const mssqlTableName = table.TABLE_NAME;
         const snowflakeTableName = mssqlTableName;
-        
+
         const csvPath = `${outputPath}/${snowflakeTableName}.csv`;
         const startTime = Date.now();
 
