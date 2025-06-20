@@ -121,59 +121,7 @@ async function uploadAndCopyCSV(tableName: string, filePath: string, conn: Conne
     const stats = await fs.stat(filePath);
     const totalSizeMB = stats.size / (1024 * 1024);
 
-    if (totalSizeMB > CHUNK_SIZE_MB) {
-        console.log(`Splitting large CSV (${totalSizeMB.toFixed(1)}MB)...`);
-
-        const totalLines = await getLineCount(filePath);
-        if (totalLines <= 1) {
-            throw new Error('CSV file has insufficient lines to split.');
-        }
-
-        const avgBytesPerLine = stats.size / totalLines;
-
-        const linesPerChunk = Math.floor((CHUNK_SIZE_MB * 1024 * 1024) / avgBytesPerLine);
-
-        console.log(`Total lines: ${totalLines}, splitting into chunks of approx ${linesPerChunk} lines (~${CHUNK_SIZE_MB}MB each)`);
-
-        const splitDir = path.join(path.dirname(filePath), `${path.basename(filePath, '.csv')}_parts`);
-        await fs.ensureDir(splitDir);
-
-        try {
-            await csvSplitStream.split(
-                fs.createReadStream(filePath),
-                {
-                    lineLimit: linesPerChunk,
-                    keepHeaders: true
-                },
-                (index: number) => fs.createWriteStream(path.join(splitDir, `part_${index}.csv`))
-            );
-
-            const chunkFiles = (await fs.readdir(splitDir)).filter(f => f.endsWith('.csv'));
-
-            for (const chunkFile of chunkFiles) {
-                const chunkPath = path.join(splitDir, chunkFile);
-                const stageFile = `${stage}/${chunkFile}`;
-
-                await new Promise<void>((resolve, reject) => {
-                    conn.execute({
-                        sqlText: `PUT file://${chunkPath} ${stage} OVERWRITE = TRUE`,
-                        complete: (err) => (err ? reject(err) : resolve()),
-                    });
-                });
-
-                await new Promise<void>((resolve, reject) => {
-                    conn.execute({
-                        sqlText: `COPY INTO ${tableName} FROM '${stageFile}' FILE_FORMAT = (TYPE = 'CSV' FIELD_OPTIONALLY_ENCLOSED_BY='"' SKIP_HEADER=1)`,
-                        complete: (err) => (err ? reject(err) : resolve()),
-                    });
-                });
-
-                await fs.remove(chunkPath);
-            }
-        } finally {
-            await fs.remove(splitDir);
-        }
-    } else {
+    if (totalSizeMB <= CHUNK_SIZE_MB) {
         const fileName = path.basename(filePath);
 
         await new Promise<void>((resolve, reject) => {
@@ -189,6 +137,66 @@ async function uploadAndCopyCSV(tableName: string, filePath: string, conn: Conne
                 complete: (err) => (err ? reject(err) : resolve()),
             });
         });
+
+        return;
+    }
+
+    console.log(`Splitting large CSV (${totalSizeMB.toFixed(1)}MB)...`);
+
+    const totalLines = await getLineCount(filePath);
+    if (totalLines <= 1) {
+        throw new Error('CSV file has insufficient lines to split.');
+    }
+
+    const avgBytesPerLine = stats.size / totalLines;
+    const linesPerChunk = Math.floor((CHUNK_SIZE_MB * 1024 * 1024) / avgBytesPerLine);
+
+    console.log(`Total lines: ${totalLines}, splitting into chunks of approx ${linesPerChunk} lines (~${CHUNK_SIZE_MB}MB each)`);
+
+    const splitDir = path.join(path.dirname(filePath), `${path.basename(filePath, '.csv')}_parts`);
+    await fs.ensureDir(splitDir);
+
+    try {
+        await csvSplitStream.split(
+            fs.createReadStream(filePath),
+            {
+                lineLimit: linesPerChunk,
+                keepHeaders: true
+            },
+            (index: number) => fs.createWriteStream(path.join(splitDir, `part_${index}.csv`))
+        );
+
+        const chunkFiles = (await fs.readdir(splitDir)).filter(f => f.endsWith('.csv'));
+
+        for (const chunkFile of chunkFiles) {
+            const chunkPath = path.join(splitDir, chunkFile);
+            const stageFile = `${stage}/${chunkFile}`;
+
+            await new Promise<void>((resolve, reject) => {
+                conn.execute({
+                    sqlText: `PUT file://${chunkPath} ${stage} OVERWRITE = TRUE`,
+                    complete: (err) => (err ? reject(err) : resolve()),
+                });
+            });
+
+            await new Promise<void>((resolve, reject) => {
+                conn.execute({
+                    sqlText: `COPY INTO ${tableName} FROM '${stageFile}' FILE_FORMAT = (TYPE = 'CSV' FIELD_OPTIONALLY_ENCLOSED_BY='"' SKIP_HEADER=1)`,
+                    complete: (err) => (err ? reject(err) : resolve()),
+                });
+            });
+
+            await fs.remove(chunkPath);
+        }
+    } catch (err) {
+        console.error(`Error during split-upload-copy: ${err}`);
+        throw err;
+    } finally {
+        try {
+            await fs.remove(splitDir);
+        } catch (cleanupErr) {
+            console.warn(`Failed to remove temp split directory '${splitDir}':`, cleanupErr);
+        }
     }
 }
 
@@ -290,10 +298,6 @@ export async function getAllDataIntoSnowflake() {
                 logMigrationStatus(`PUBLIC.${snowflakeTableName}`, "FAILED", timeTaken, (error as Error).message);
                 failedCount++;
             } finally {
-                if (!global.gc) {
-                    console.warn("Warning: Garbage collection is not exposed. Run node with --expose-gc for manual GC.");
-                }
-                global.gc?.();
                 await fs.remove(csvPath);
             }
         });
