@@ -152,3 +152,33 @@ export async function runWithConcurrencyLimit<T>(
 
   return results;
 }
+
+export function mapMSSQLTypeToSnowflakeType(type: string): string {
+    const typeMap: Record<string, string> = {
+        int: 'INTEGER',
+        bigint: 'BIGINT',
+        smallint: 'SMALLINT',
+        tinyint: 'SMALLINT',
+        bit: 'BOOLEAN',
+        decimal: 'NUMBER',
+        numeric: 'NUMBER',
+        money: 'FLOAT',
+        float: 'FLOAT',
+        real: 'FLOAT',
+        datetime: 'TIMESTAMP_NTZ',
+        smalldatetime: 'TIMESTAMP_NTZ',
+        date: 'DATE',
+        time: 'TIME',
+        char: 'CHAR',
+        varchar: 'VARCHAR',
+        nchar: 'CHAR',
+        nvarchar: 'VARCHAR',
+        text: 'TEXT',
+        ntext: 'TEXT',
+        binary: 'BINARY',
+        varbinary: 'BINARY',
+        uniqueidentifier: 'VARCHAR'
+    };
+
+    return typeMap[type.toLowerCase()] || 'VARCHAR';
+}

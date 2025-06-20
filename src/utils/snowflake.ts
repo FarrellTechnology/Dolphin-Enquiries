@@ -2,12 +2,19 @@ import snowflake from 'snowflake-sdk';
 import { settings } from './';
 
 export let connection: snowflake.Connection | null = null;
+let dolphinConnection: boolean = false;
 let config: any = null;
 
-export async function initDbConnection() {
-  if (connection) return connection;
+export async function initDbConnection(isDolphinData: boolean = false) {
+  if (connection && dolphinConnection == isDolphinData) return connection;
 
   config = await settings.getSnowflakeConfig();
+
+  if (isDolphinData) {
+    dolphinConnection = true;
+  } else {
+    dolphinConnection = false;
+  }
 
   if (!config) throw new Error('Snowflake config is missing');
 
@@ -16,7 +23,7 @@ export async function initDbConnection() {
     username: config.username,
     password: config.password,
     warehouse: config.warehouse,
-    database: config.database,
+    database: !isDolphinData ? config.database : 'DOLPHINDATA',
     schema: config.schema,
     role: config.role,
   });
