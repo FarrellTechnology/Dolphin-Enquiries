@@ -248,6 +248,9 @@ export async function getAllDataIntoSnowflake() {
     }
     isRunning = true;
 
+    let successCount = 0;
+    let failedCount = 0;
+
     try {
         const tables = await getAllTables();
         console.log(`Total tables found: ${tables.length}`);
@@ -281,9 +284,11 @@ export async function getAllDataIntoSnowflake() {
 
                 const timeTaken = Date.now() - startTime;
                 logMigrationStatus(`PUBLIC.${snowflakeTableName}`, "SUCCESS", timeTaken);
+                successCount++;
             } catch (error) {
                 const timeTaken = Date.now() - startTime;
                 logMigrationStatus(`PUBLIC.${snowflakeTableName}`, "FAILED", timeTaken, (error as Error).message);
+                failedCount++;
             } finally {
                 if (!global.gc) {
                     console.warn("Warning: Garbage collection is not exposed. Run node with --expose-gc for manual GC.");
@@ -294,6 +299,8 @@ export async function getAllDataIntoSnowflake() {
         });
 
         console.log('All tables migrated to Snowflake');
+        console.log(`Success count: ${successCount}`);
+        console.log(`Failed count: ${failedCount}`);
     } finally {
         isRunning = false;
     }
