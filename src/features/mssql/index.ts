@@ -66,7 +66,11 @@ async function exportTableToCSV(schema: string, tableName: string, outputPath: s
         request.query(`SELECT * FROM ${fullTableName}`);
 
         request.on('row', (row) => {
-            csvStream.write(fixTimestampFormat(row));
+            const ok = csvStream.write(fixTimestampFormat(row));
+            if (!ok) {
+                request.pause();
+                csvStream.once('drain', () => request.resume());
+            }
         });
 
         request.on('error', (err) => {
@@ -81,7 +85,6 @@ async function exportTableToCSV(schema: string, tableName: string, outputPath: s
         });
     });
 }
-
 
 async function getAllTables() {
     const pool = await connect();
