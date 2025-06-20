@@ -48,6 +48,11 @@
           data-tab="cronitor" type="button">
           Cronitor
         </button>
+        <button
+          class="py-2 px-4 border-b-2 border-transparent hover:border-gray-300 dark:hover:border-gray-600 text-gray-600 dark:text-gray-400 focus:outline-none"
+          data-tab="mssql" type="button">
+          MS SQL
+        </button>
       </nav>
     </div>
 
@@ -56,39 +61,39 @@
       <!-- SMTP Settings Form -->
       <form id="smtpForm" class="space-y-4 tab-content" data-tab-content="smtp">
         <div>
-          <label for="host" class="block text-sm font-medium mb-1">SMTP Host</label>
-          <input type="text" id="host" name="host" required
+          <label for="smtpHost" class="block text-sm font-medium mb-1">SMTP Host</label>
+          <input type="text" id="smtpHost" name="smtpHost" required
             class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
         </div>
 
         <div>
-          <label for="port" class="block text-sm font-medium mb-1">Port</label>
-          <input type="number" id="port" name="port" required
+          <label for="smtpPort" class="block text-sm font-medium mb-1">Port</label>
+          <input type="number" id="smtpPort" name="smtpPort" required
             class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
         </div>
 
         <div class="flex items-center">
-          <input type="checkbox" id="secure" name="secure"
+          <input type="checkbox" id="smtpSecure" name="smtpSecure"
             class="h-4 w-4 text-blue-600 rounded border-gray-300 dark:border-gray-700" />
-          <label for="secure" class="ml-2 text-sm">Use SSL/TLS</label>
+          <label for="smtpSecure" class="ml-2 text-sm">Use SSL/TLS</label>
         </div>
 
         <div>
-          <label for="user" class="block text-sm font-medium mb-1">Username</label>
-          <input type="text" id="user" name="user" required
+          <label for="smtpUser" class="block text-sm font-medium mb-1">Username</label>
+          <input type="text" id="smtpUser" name="smtpUser" required
             class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
         </div>
 
         <div>
-          <label for="pass" class="block text-sm font-medium mb-1">Password</label>
-          <input type="password" id="pass" name="pass" required
+          <label for="smtpPass" class="block text-sm font-medium mb-1">Password</label>
+          <input type="password" id="smtpPass" name="smtpPass" required
             class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
         </div>
 
         <div>
-          <label for="to" class="block text-sm font-medium mb-1">Recipient Email
+          <label for="smtpTo" class="block text-sm font-medium mb-1">Recipient Email
             (comma-separated)</label>
-          <input type="text" id="to" name="to" required placeholder="example@email.com,exampletwo@email.com"
+          <input type="text" id="smtpTo" name="smtpTo" required placeholder="example@email.com,exampletwo@email.com"
             class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
         </div>
 
@@ -212,38 +217,38 @@
       <!-- Snowflake Form -->
       <form id="snowflakeForm" class="space-y-4 tab-content hidden" data-tab-content="snowflake">
         <div>
-          <label for="account" class="block text-sm font-medium mb-1">Account</label>
-          <input type="text" id="account" name="account" required
+          <label for="snowflakeAccount" class="block text-sm font-medium mb-1">Account</label>
+          <input type="text" id="snowflakeAccount" name="snowflakeAccount" required
             class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
         </div>
         <div>
-          <label for="username" class="block text-sm font-medium mb-1">Username</label>
-          <input type="text" id="username" name="username" required
+          <label for="snowflakeUsername" class="block text-sm font-medium mb-1">Username</label>
+          <input type="text" id="snowflakeUsername" name="snowflakeUsername" required
             class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
         </div>
         <div>
-          <label for="password" class="block text-sm font-medium mb-1">Password</label>
-          <input type="password" id="password" name="password" required
+          <label for="snowflakePassword" class="block text-sm font-medium mb-1">Password</label>
+          <input type="password" id="snowflakePassword" name="snowflakePassword" required
             class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
         </div>
         <div>
-          <label for="warehouse" class="block text-sm font-medium mb-1">Warehouse</label>
-          <input type="text" id="warehouse" name="warehouse" required
+          <label for="snowflakeWarehouse" class="block text-sm font-medium mb-1">Warehouse</label>
+          <input type="text" id="snowflakeWarehouse" name="snowflakeWarehouse" required
             class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
         </div>
         <div>
-          <label for="database" class="block text-sm font-medium mb-1">Database</label>
-          <input type="text" id="database" name="database" required
+          <label for="snowflakeDatabase" class="block text-sm font-medium mb-1">Database</label>
+          <input type="text" id="snowflakeDatabase" name="snowflakeDatabase" required
             class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
         </div>
         <div>
-          <label for="schema" class="block text-sm font-medium mb-1">Schema</label>
-          <input type="text" id="schema" name="schema" required
+          <label for="snowflakeSchema" class="block text-sm font-medium mb-1">Schema</label>
+          <input type="text" id="snowflakeSchema" name="snowflakeSchema" required
             class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
         </div>
         <div>
-          <label for="role" class="block text-sm font-medium mb-1">Role</label>
-          <input type="text" id="role" name="role" required
+          <label for="snowflakeRole" class="block text-sm font-medium mb-1">Role</label>
+          <input type="text" id="snowflakeRole" name="snowflakeRole" required
             class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
         </div>
         <div class="pt-4">
@@ -258,8 +263,8 @@
       <!-- Cronitor Form -->
       <form id="cronitorForm" class="space-y-4 tab-content hidden" data-tab-content="cronitor">
         <div>
-          <label for="apiKey" class="block text-sm font-medium mb-1">API Key</label>
-          <input type="text" id="apiKey" name="apiKey" required
+          <label for="cronitorApiKey" class="block text-sm font-medium mb-1">API Key</label>
+          <input type="text" id="cronitorApiKey" name="cronitorApiKey" required
             class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
         </div>
         <div class="pt-4">
@@ -269,6 +274,47 @@
           </button>
         </div>
         <div id="cronitorFormStatus" class="mt-2 text-sm text-center hidden"></div>
+      </form>
+
+      <!-- Ms SQL Form -->
+      <form id="mssqlForm" class="space-y-4 tab-content hidden" data-tab-content="mssql">
+        <div>
+          <label for="mssqlServer" class="block text-sm font-medium mb-1">Server</label>
+          <input type="text" id="mssqlServer" name="mssqlServer" required
+            class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
+        </div>
+        <div>
+          <label for="mssqlDatabase" class="block text-sm font-medium mb-1">Database</label>
+          <input type="text" id="mssqlDatabase" name="mssqlDatabase" required
+            class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
+        </div>
+        <div>
+          <label for="mssqlUser" class="block text-sm font-medium mb-1">User</label>
+          <input type="text" id="mssqlUser" name="mssqlUser" required
+            class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
+        </div>
+        <div>
+          <label for="mssqlPassword" class="block text-sm font-medium mb-1">Password</label>
+          <input type="password" id="mssqlPassword" name="mssqlPassword" required
+            class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
+        </div>
+        <div class="flex items-center">
+          <input type="checkbox" id="mssqlTrustServerCertificate" name="mssqlTrustServerCertificate"
+            class="h-4 w-4 text-blue-600 rounded border-gray-300 dark:border-gray-700" />
+          <label for="mssqlTrustServerCertificate" class="ml-2 text-sm">Trust Server Certificate</label>
+        </div>
+        <div class="flex items-center">
+          <input type="checkbox" id="mssqlEncrypt" name="mssqlEncrypt"
+            class="h-4 w-4 text-blue-600 rounded border-gray-300 dark:border-gray-700" />
+          <label for="mssqlEncrypt" class="ml-2 text-sm">Encrypt</label>
+        </div>
+        <div class="pt-4">
+          <button type="submit"
+            class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md transition-colors">
+            Save MS SQL Settings
+          </button>
+        </div>
+        <div id="mssqlFormStatus" class="mt-2 text-sm text-center hidden"></div>
       </form>
     </div>
   </div>
@@ -297,12 +343,12 @@
     async function loadSettings() {
       const smtpConfig = await window.electronAPI?.getSMTPConfig?.();
       if (smtpConfig) {
-        document.getElementById('host').value = smtpConfig.host;
-        document.getElementById('port').value = smtpConfig.port;
-        document.getElementById('secure').checked = smtpConfig.secure;
-        document.getElementById('user').value = smtpConfig.user;
-        document.getElementById('pass').value = smtpConfig.pass;
-        document.getElementById('to').value = smtpConfig.to;
+        document.getElementById('smtpHost').value = smtpConfig.host;
+        document.getElementById('smtpPort').value = smtpConfig.port;
+        document.getElementById('smtpSecure').checked = smtpConfig.secure;
+        document.getElementById('smtpUser').value = smtpConfig.user;
+        document.getElementById('smtpPass').value = smtpConfig.pass;
+        document.getElementById('smtpTo').value = smtpConfig.to;
       }
 
       const sftp1Config = await window.electronAPI?.getSFTP1Config?.();
@@ -334,18 +380,28 @@
 
       const databaseConfig = await window.electronAPI?.getSnowflakeConfig?.();
       if (databaseConfig) {
-        document.getElementById('account').value = databaseConfig.account;
-        document.getElementById('username').value = databaseConfig.username;
-        document.getElementById('password').value = databaseConfig.password;
-        document.getElementById('warehouse').value = databaseConfig.warehouse;
-        document.getElementById('database').value = databaseConfig.database;
-        document.getElementById('schema').value = databaseConfig.schema;
-        document.getElementById('role').value = databaseConfig.role;
+        document.getElementById('snowflakeAccount').value = databaseConfig.account;
+        document.getElementById('snowflakeUsername').value = databaseConfig.username;
+        document.getElementById('snowflakePassword').value = databaseConfig.password;
+        document.getElementById('snowflakeWarehouse').value = databaseConfig.warehouse;
+        document.getElementById('snowflakeDatabase').value = databaseConfig.database;
+        document.getElementById('snowflakeSchema').value = databaseConfig.schema;
+        document.getElementById('snowflakeRole').value = databaseConfig.role;
       }
 
       const cronitorConfig = await window.electronAPI?.getCronitorConfig?.();
       if (cronitorConfig) {
-        document.getElementById('apiKey').value = cronitorConfig.apiKey;
+        document.getElementById('cronitorApiKey').value = cronitorConfig.apiKey;
+      }
+
+      const mssqlConfig = await window.electronAPI?.getMsSQLConfig?.();
+      if (mssqlConfig) {
+        document.getElementById('mssqlServer').value = mssqlConfig.server;
+        document.getElementById('mssqlDatabase').value = mssqlConfig.database;
+        document.getElementById('mssqlUser').value = mssqlConfig.user;
+        document.getElementById('mssqlPassword').value = mssqlConfig.password;
+        document.getElementById('mssqlTrustServerCertificate').value = mssqlConfig.trustServerCertificate;
+        document.getElementById('mssqlEncrypt').value = mssqlConfig.encrypt;
       }
     }
 
@@ -363,12 +419,12 @@
 
       try {
         const config = {
-          host: document.getElementById('host').value,
-          port: parseInt(document.getElementById('port').value),
-          secure: document.getElementById('secure').checked,
-          user: document.getElementById('user').value,
-          pass: document.getElementById('pass').value,
-          to: document.getElementById('to').value,
+          host: document.getElementById('smtpHost').value,
+          port: parseInt(document.getElementById('smtpPort').value),
+          secure: document.getElementById('smtpSecure').checked,
+          user: document.getElementById('smtpUser').value,
+          pass: document.getElementById('smtpPass').value,
+          to: document.getElementById('smtpTo').value,
         };
         const result = await window.electronAPI?.saveSMTPConfig?.(config);
 
@@ -504,13 +560,13 @@
 
       try {
         const config = {
-          account: document.getElementById('account').value,
-          username: document.getElementById('username').value,
-          password: document.getElementById('password').value,
-          warehouse: document.getElementById('warehouse').value,
-          database: document.getElementById('database').value,
-          schema: document.getElementById('schema').value,
-          role: document.getElementById('role').value,
+          account: document.getElementById('snowflakeAccount').value,
+          username: document.getElementById('snowflakeUsername').value,
+          password: document.getElementById('snowflakePassword').value,
+          warehouse: document.getElementById('snowflakeWarehouse').value,
+          database: document.getElementById('snowflakeDatabase').value,
+          schema: document.getElementById('snowflakeSchema').value,
+          role: document.getElementById('snowflakeRole').value,
         };
         const result = await window.electronAPI?.saveSnowflakeConfig?.(config);
 
@@ -541,7 +597,7 @@
 
       try {
         const config = {
-          apiKey: document.getElementById('apiKey').value,
+          apiKey: document.getElementById('cronitorApiKey').value,
         };
         const result = await window.electronAPI?.saveCronitorConfig?.(config);
 
@@ -549,6 +605,42 @@
 
         if (result.success) {
           status.textContent = 'Cronitor Settings saved successfully!';
+          status.classList.remove('text-gray-600', 'text-red-600');
+          status.classList.add('text-green-600');
+        } else {
+          throw new Error(result.error || 'Unknown error');
+        }
+      } catch (error) {
+        status.textContent = `Error: ${error.message}`;
+        status.classList.remove('text-gray-600', 'text-green-600');
+        status.classList.add('text-red-600');
+      }
+      status.classList.remove('hidden');
+      setTimeout(() => status.classList.add('hidden'), 5000);
+    });
+
+    document.getElementById('mssqlForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const status = document.getElementById('mssqlFormStatus');
+      status.textContent = 'Saving...';
+      status.classList.remove('hidden', 'text-red-600', 'text-green-600');
+      status.classList.add('text-gray-600');
+
+      try {
+        const config = {
+          server: document.getElementById('mssqlServer').value,
+          database: document.getElementById('mssqlDatabase').value,
+          username: document.getElementById('mssqlUsername').value,
+          password: document.getElementById('mssqlPassword').value,
+          trustServerCertificate: document.getElementById('mssqlTrustServerCertificate').checked,
+          encrypt: document.getElementById('mssqlEncrypt').checked,
+        };
+        const result = await window.electronAPI?.saveMsSQLConfig?.(config);
+
+        if (!result) throw new Error('No response from backend');
+
+        if (result.success) {
+          status.textContent = 'Ms SQL Settings saved successfully!';
           status.classList.remove('text-gray-600', 'text-red-600');
           status.classList.add('text-green-600');
         } else {
