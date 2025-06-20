@@ -2,7 +2,7 @@ import { app, Menu, ipcMain } from "electron";
 import { enableAutoLaunch, setupAutoUpdater, setupScheduler, checkDolphinFiles, watchAndTransferFiles, getAllDataIntoSnowflake } from "./features";
 import { createMainWindow, setIsQuitting, setupSettingsHandlers, setupTray } from "./window";
 
-app.commandLine.appendSwitch('js-flags', '--max-old-space-size=4096 --expose-gc');
+app.commandLine.appendSwitch('js-flags', '--max-old-space-size=8192 --expose-gc');
 
 app.whenReady().then(async () => {
   await enableAutoLaunch();
