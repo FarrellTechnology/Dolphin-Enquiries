@@ -38,23 +38,20 @@ function logMigrationStatus(
 }
 
 async function connect() {
-    if (connection) {
+    if (connection && connection.connected) {
         return connection;
     }
 
     config = await settings.getMsSQLConfig();
-
     if (!config) throw new Error('MsSQL config is missing');
 
     connection = await sql.connect(config);
-
     return connection;
 }
 
 async function exportTableToCSV(tableName: string, outputPath: string) {
     const pool = await connect();
     const result = await pool.request().query(`SELECT * FROM ${tableName}`);
-    await pool.close();
 
     await fs.ensureDir(outputPath);
     const ws = fs.createWriteStream(`${outputPath}/${tableName}.csv`);
@@ -75,8 +72,6 @@ async function getAllTables() {
   `;
 
     const result = await pool.request().query(query);
-    await pool.close();
-
     return result.recordset;
 }
 
