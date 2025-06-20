@@ -49,9 +49,10 @@ async function connect() {
     return connection;
 }
 
-async function exportTableToCSV(tableName: string, outputPath: string) {
+async function exportTableToCSV(schema: string, tableName: string, outputPath: string) {
     const pool = await connect();
-    const result = await pool.request().query(`SELECT * FROM ${tableName}`);
+    const fullTableName = `[${schema}].[${tableName}]`;  // MSSQL schema-qualified table name
+    const result = await pool.request().query(`SELECT * FROM ${fullTableName}`);
 
     await fs.ensureDir(outputPath);
     const ws = fs.createWriteStream(`${outputPath}/${tableName}.csv`);
@@ -95,7 +96,8 @@ async function uploadAndCopyCSV(tableName: string, filePath: string, conn: Conne
 }
 
 async function doesTableExistInSnowflake(conn: Connection, tableName: string): Promise<boolean> {
-    const [schema, name] = tableName.includes('.') ? tableName.split('.') : ['PUBLIC', tableName];
+    const schema = 'PUBLIC'; // always use PUBLIC
+    const name = tableName;
     const query = `
         SELECT COUNT(*) AS count
         FROM INFORMATION_SCHEMA.TABLES
@@ -134,7 +136,7 @@ async function generateCreateTableSQL(tableSchema: string, tableName: string): P
         return `"${col.COLUMN_NAME}" ${typeWithLength}`;
     });
 
-    return `CREATE TABLE ${tableSchema}.${tableName} (\n  ${columns.join(',\n  ')}\n);`;
+    return `CREATE TABLE PUBLIC.${tableName} (\n  ${columns.join(',\n  ')}\n);`;
 }
 
 async function batchRun<T>(
@@ -154,12 +156,15 @@ export async function getAllDataIntoSnowflake() {
     const outputPath = './tmp_csvs';
 
     await batchRun(tables, 4, async (table) => {
-        const tableName = `${table.TABLE_SCHEMA}.${table.TABLE_NAME}`;
-        const csvPath = `${outputPath}/${tableName}.csv`;
+        const mssqlSchema = table.TABLE_SCHEMA;
+        const mssqlTableName = table.TABLE_NAME;
+        const snowflakeTableName = mssqlTableName;
+        
+        const csvPath = `${outputPath}/${snowflakeTableName}.csv`;
         const startTime = Date.now();
 
         try {
-            const tableExists = await doesTableExistInSnowflake(conn, tableName);
+            const tableExists = await doesTableExistInSnowflake(conn, snowflakeTableName);
 
             if (!tableExists) {
                 const createSQL = await generateCreateTableSQL(table.TABLE_SCHEMA, table.TABLE_NAME);
@@ -169,17 +174,17 @@ export async function getAllDataIntoSnowflake() {
                         complete: (err) => (err ? reject(err) : resolve()),
                     });
                 });
-                console.log(`Created missing table: ${tableName}`);
+                console.log(`Created missing table: PUBLIC.${snowflakeTableName}`);
             }
 
-            await exportTableToCSV(tableName, outputPath);
-            await uploadAndCopyCSV(tableName, csvPath, conn);
+            await exportTableToCSV(mssqlSchema, mssqlTableName, outputPath);
+            await uploadAndCopyCSV(snowflakeTableName, csvPath, conn);
 
             const timeTaken = Date.now() - startTime;
-            logMigrationStatus(tableName, "SUCCESS", timeTaken);
+            logMigrationStatus(`PUBLIC.${snowflakeTableName}`, "SUCCESS", timeTaken);
         } catch (error) {
             const timeTaken = Date.now() - startTime;
-            logMigrationStatus(tableName, "FAILED", timeTaken, (error as Error).message);
+            logMigrationStatus(`PUBLIC.${snowflakeTableName}`, "FAILED", timeTaken, (error as Error).message);
         }
     });
 
