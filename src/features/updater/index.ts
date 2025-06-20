@@ -6,9 +6,7 @@ export function setupAutoUpdater(): void {
   autoUpdater.autoInstallOnAppQuit = true;
   autoUpdater.disableWebInstaller = true;
 
-  if (app.isPackaged) {
-    autoUpdater.checkForUpdates();
-  }
+  checkForUpdates();
 
   autoUpdater.on("update-available", (info) => {
     dialog.showMessageBox({
@@ -35,4 +33,13 @@ export function setupAutoUpdater(): void {
   autoUpdater.on("error", err => {
     dialog.showErrorBox("Update Error", err.message);
   });
+}
+
+
+export function checkForUpdates() {
+  if (!app.isPackaged) {
+    return;
+  }
+
+  autoUpdater.checkForUpdates();
 }

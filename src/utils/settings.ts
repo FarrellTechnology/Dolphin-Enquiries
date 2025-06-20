@@ -68,7 +68,7 @@ class Settings {
             password: '',
             options: {
               trustServerCertificate: true,
-              encrypt: true,
+              encrypt: false,
             },
           }
         }
