@@ -2,7 +2,7 @@ import sql from 'mssql';
 import fs from 'fs-extra';
 import path from 'path';
 import { format } from '@fast-csv/format';
-import { documentsFolder, initDbConnection, mapMSSQLTypeToSnowflakeType, settings } from '../../utils';
+import { documentsFolder, fixTimestampFormat, initDbConnection, mapMSSQLTypeToSnowflakeType, settings } from '../../utils';
 import { Connection } from 'snowflake-sdk';
 
 let connection: sql.ConnectionPool | null = null;
@@ -59,7 +59,7 @@ async function exportTableToCSV(schema: string, tableName: string, outputPath: s
     const csvStream = format({ headers: true });
 
     csvStream.pipe(ws);
-    result.recordset.forEach(row => csvStream.write(row));
+    result.recordset.forEach(row => csvStream.write(fixTimestampFormat(row)));
     csvStream.end();
 }
 
