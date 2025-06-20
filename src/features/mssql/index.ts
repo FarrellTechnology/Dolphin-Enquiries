@@ -2,7 +2,7 @@ import sql from 'mssql';
 import fs from 'fs-extra';
 import path from 'path';
 import { format } from '@fast-csv/format';
-import { documentsFolder, fixTimestampFormat, initDbConnection, mapMSSQLTypeToSnowflakeType, settings } from '../../utils';
+import { documentsFolder, fixTimestampFormat, initDbConnection, mapMSSQLTypeToSnowflakeType, runWithConcurrencyLimit, settings } from '../../utils';
 import { Connection } from 'snowflake-sdk';
 import * as csvSplitStream from 'csv-split-stream';
 import readline from 'readline';
@@ -143,6 +143,7 @@ async function uploadAndCopyCSV(tableName: string, filePath: string, conn: Conne
                 fs.createReadStream(filePath),
                 {
                     lineLimit: linesPerChunk,
+                    keepHeaders: true
                 },
                 (index: number) => fs.createWriteStream(path.join(splitDir, `part_${index}.csv`))
             );
@@ -239,17 +240,6 @@ async function generateCreateTableSQL(tableSchema: string, tableName: string): P
     return `CREATE TABLE PUBLIC.${tableName} (\n  ${columns.join(',\n  ')}\n);`;
 }
 
-async function batchRun<T>(
-    items: T[],
-    batchSize: number,
-    fn: (item: T, index: number) => Promise<void>
-) {
-    for (let i = 0; i < items.length; i += batchSize) {
-        const batch = items.slice(i, i + batchSize);
-        await Promise.all(batch.map((item, idx) => fn(item, i + idx)));
-        global.gc?.();
-    }
-}
 
 export async function getAllDataIntoSnowflake() {
     if (isRunning) {
@@ -264,9 +254,7 @@ export async function getAllDataIntoSnowflake() {
         const conn = await initDbConnection(true);
         const outputPath = './tmp_csvs';
 
-        await batchRun(tables, 10, async (table, index) => {
-            console.log(`Migrating table ${index + 1} of ${tables.length}: ${table.TABLE_SCHEMA}.${table.TABLE_NAME}`);
-
+        await runWithConcurrencyLimit(tables, 10, async (table) => {
             const mssqlSchema = table.TABLE_SCHEMA;
             const mssqlTableName = table.TABLE_NAME;
             const snowflakeTableName = mssqlTableName;
@@ -297,6 +285,10 @@ export async function getAllDataIntoSnowflake() {
                 const timeTaken = Date.now() - startTime;
                 logMigrationStatus(`PUBLIC.${snowflakeTableName}`, "FAILED", timeTaken, (error as Error).message);
             } finally {
+                if (!global.gc) {
+                    console.warn("Warning: Garbage collection is not exposed. Run node with --expose-gc for manual GC.");
+                }
+                global.gc?.();
                 await fs.remove(csvPath);
             }
         });
