@@ -2,7 +2,7 @@ import sql from 'mssql';
 import fs from 'fs-extra';
 import path from 'path';
 import { format } from '@fast-csv/format';
-import { documentsFolder, initDbConnection, settings } from '../../utils';
+import { documentsFolder, initDbConnection, mapMSSQLTypeToSnowflakeType, settings } from '../../utils';
 import { Connection } from 'snowflake-sdk';
 
 let connection: sql.ConnectionPool | null = null;
@@ -94,6 +94,49 @@ async function uploadAndCopyCSV(tableName: string, filePath: string, conn: Conne
     });
 }
 
+async function doesTableExistInSnowflake(conn: Connection, tableName: string): Promise<boolean> {
+    const [schema, name] = tableName.includes('.') ? tableName.split('.') : ['PUBLIC', tableName];
+    const query = `
+        SELECT COUNT(*) AS count
+        FROM INFORMATION_SCHEMA.TABLES
+        WHERE TABLE_SCHEMA = UPPER('${schema}')
+        AND TABLE_NAME = UPPER('${name}')
+    `;
+
+    return await new Promise<boolean>((resolve, reject) => {
+        conn.execute({
+            sqlText: query,
+            complete: (err, stmt, rows) => {
+                if (err) return reject(err);
+                const exists = !!(rows && rows[0] && rows[0].COUNT === 1);
+                resolve(exists);
+            }
+        });
+    });
+}
+
+async function generateCreateTableSQL(tableSchema: string, tableName: string): Promise<string> {
+    const pool = await connect();
+
+    const result = await pool.request().query(`
+        SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = '${tableSchema}' AND TABLE_NAME = '${tableName}'
+        ORDER BY ORDINAL_POSITION
+    `);
+
+    const columns = result.recordset.map(col => {
+        const snowflakeType = mapMSSQLTypeToSnowflakeType(col.DATA_TYPE);
+        const maxLen = col.CHARACTER_MAXIMUM_LENGTH;
+        const typeWithLength = ['VARCHAR', 'CHAR'].includes(snowflakeType) && maxLen > 0 && maxLen !== -1
+            ? `${snowflakeType}(${maxLen})` : snowflakeType;
+
+        return `"${col.COLUMN_NAME}" ${typeWithLength}`;
+    });
+
+    return `CREATE TABLE ${tableSchema}.${tableName} (\n  ${columns.join(',\n  ')}\n);`;
+}
+
 async function batchRun<T>(
     items: T[],
     batchSize: number,
@@ -107,18 +150,31 @@ async function batchRun<T>(
 
 export async function getAllDataIntoSnowflake() {
     const tables = await getAllTables();
-    const conn = await initDbConnection();
+    const conn = await initDbConnection(true);
     const outputPath = './tmp_csvs';
 
     await batchRun(tables, 4, async (table) => {
         const tableName = `${table.TABLE_SCHEMA}.${table.TABLE_NAME}`;
         const csvPath = `${outputPath}/${tableName}.csv`;
-
         const startTime = Date.now();
 
         try {
+            const tableExists = await doesTableExistInSnowflake(conn, tableName);
+
+            if (!tableExists) {
+                const createSQL = await generateCreateTableSQL(table.TABLE_SCHEMA, table.TABLE_NAME);
+                await new Promise<void>((resolve, reject) => {
+                    conn.execute({
+                        sqlText: createSQL,
+                        complete: (err) => (err ? reject(err) : resolve()),
+                    });
+                });
+                console.log(`Created missing table: ${tableName}`);
+            }
+
             await exportTableToCSV(tableName, outputPath);
             await uploadAndCopyCSV(tableName, csvPath, conn);
+
             const timeTaken = Date.now() - startTime;
             logMigrationStatus(tableName, "SUCCESS", timeTaken);
         } catch (error) {
@@ -129,3 +185,4 @@ export async function getAllDataIntoSnowflake() {
 
     console.log('All tables migrated to Snowflake');
 }
+
