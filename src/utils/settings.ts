@@ -64,7 +64,7 @@ class Settings {
           mssql: {
             server: '',
             database: '',
-            username: '',
+            user: '',
             password: '',
             options: {
               trustServerCertificate: true,

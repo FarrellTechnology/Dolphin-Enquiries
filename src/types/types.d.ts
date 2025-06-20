@@ -33,7 +33,7 @@ type CronitorConfig = {
 type MsSQLConfig = {
     server: string,
     database: string,
-    username: string,
+    user: string,
     password: string,
     options: {
         trustServerCertificate: boolean,
