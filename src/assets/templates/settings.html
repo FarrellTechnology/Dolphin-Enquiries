@@ -213,7 +213,7 @@
         </div>
         <div id="sftp3Status" class="mt-2 text-sm text-center hidden"></div>
       </form>
-      
+
       <!-- Snowflake Form -->
       <form id="snowflakeForm" class="space-y-4 tab-content hidden" data-tab-content="snowflake">
         <div>
@@ -289,8 +289,8 @@
             class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
         </div>
         <div>
-          <label for="mssqlUser" class="block text-sm font-medium mb-1">User</label>
-          <input type="text" id="mssqlUser" name="mssqlUser" required
+          <label for="mssqlUsername" class="block text-sm font-medium mb-1">User</label>
+          <input type="text" id="mssqlUsername" name="mssqlUsername" required
             class="w-full px-3 py-2 border rounded-md dark:bg-gray-800 dark:border-gray-700" />
         </div>
         <div>
@@ -398,10 +398,10 @@
       if (mssqlConfig) {
         document.getElementById('mssqlServer').value = mssqlConfig.server;
         document.getElementById('mssqlDatabase').value = mssqlConfig.database;
-        document.getElementById('mssqlUser').value = mssqlConfig.user;
+        document.getElementById('mssqlUsername').value = mssqlConfig.user;
         document.getElementById('mssqlPassword').value = mssqlConfig.password;
-        document.getElementById('mssqlTrustServerCertificate').value = mssqlConfig.trustServerCertificate;
-        document.getElementById('mssqlEncrypt').value = mssqlConfig.encrypt;
+        document.getElementById('mssqlTrustServerCertificate').value = mssqlConfig.options.trustServerCertificate;
+        document.getElementById('mssqlEncrypt').value = mssqlConfig.options.encrypt;
       }
     }
 
@@ -632,8 +632,10 @@
           database: document.getElementById('mssqlDatabase').value,
           username: document.getElementById('mssqlUsername').value,
           password: document.getElementById('mssqlPassword').value,
-          trustServerCertificate: document.getElementById('mssqlTrustServerCertificate').checked,
-          encrypt: document.getElementById('mssqlEncrypt').checked,
+          options: {
+            trustServerCertificate: document.getElementById('mssqlTrustServerCertificate').checked,
+            encrypt: document.getElementById('mssqlEncrypt').checked,
+          }
         };
         const result = await window.electronAPI?.saveMsSQLConfig?.(config);
 
