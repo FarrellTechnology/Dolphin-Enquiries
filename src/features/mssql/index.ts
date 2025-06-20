@@ -102,9 +102,6 @@ async function getAllTables() {
 
 async function uploadAndCopyCSV(tableName: string, filePath: string, conn: Connection): Promise<void> {
     const stage = '@~';
-    const splitDir = path.join(path.dirname(filePath), `${path.basename(filePath, '.csv')}_parts`);
-    await fs.ensureDir(splitDir);
-
     const CHUNK_SIZE_MB = 100;
 
     const stats = await fs.stat(filePath);
@@ -112,38 +109,44 @@ async function uploadAndCopyCSV(tableName: string, filePath: string, conn: Conne
 
     if (totalSizeMB > CHUNK_SIZE_MB) {
         console.log(`Splitting large CSV (${totalSizeMB.toFixed(1)}MB)...`);
-        await csvSplitStream.split(
-            fs.createReadStream(filePath),
-            {
-                lineLimit: 1000000,
-            },
-            (index: number) => fs.createWriteStream(path.join(splitDir, `part_${index}.csv`))
-        );
+        
+        const splitDir = path.join(path.dirname(filePath), `${path.basename(filePath, '.csv')}_parts`);
+        await fs.ensureDir(splitDir);
 
-        const chunkFiles = (await fs.readdir(splitDir)).filter(f => f.endsWith('.csv'));
+        try {
+            await csvSplitStream.split(
+                fs.createReadStream(filePath),
+                {
+                    lineLimit: 1000000,
+                },
+                (index: number) => fs.createWriteStream(path.join(splitDir, `part_${index}.csv`))
+            );
 
-        for (const chunkFile of chunkFiles) {
-            const chunkPath = path.join(splitDir, chunkFile);
-            const stageFile = `${stage}/${chunkFile}`;
+            const chunkFiles = (await fs.readdir(splitDir)).filter(f => f.endsWith('.csv'));
 
-            await new Promise<void>((resolve, reject) => {
-                conn.execute({
-                    sqlText: `PUT file://${chunkPath} ${stage} OVERWRITE = TRUE`,
-                    complete: (err) => (err ? reject(err) : resolve()),
+            for (const chunkFile of chunkFiles) {
+                const chunkPath = path.join(splitDir, chunkFile);
+                const stageFile = `${stage}/${chunkFile}`;
+
+                await new Promise<void>((resolve, reject) => {
+                    conn.execute({
+                        sqlText: `PUT file://${chunkPath} ${stage} OVERWRITE = TRUE`,
+                        complete: (err) => (err ? reject(err) : resolve()),
+                    });
                 });
-            });
 
-            await new Promise<void>((resolve, reject) => {
-                conn.execute({
-                    sqlText: `COPY INTO ${tableName} FROM '${stageFile}' FILE_FORMAT = (TYPE = 'CSV' FIELD_OPTIONALLY_ENCLOSED_BY='"' SKIP_HEADER=1)`,
-                    complete: (err) => (err ? reject(err) : resolve()),
+                await new Promise<void>((resolve, reject) => {
+                    conn.execute({
+                        sqlText: `COPY INTO ${tableName} FROM '${stageFile}' FILE_FORMAT = (TYPE = 'CSV' FIELD_OPTIONALLY_ENCLOSED_BY='"' SKIP_HEADER=1)`,
+                        complete: (err) => (err ? reject(err) : resolve()),
+                    });
                 });
-            });
 
-            await fs.remove(chunkPath);
+                await fs.remove(chunkPath);
+            }
+        } finally {
+            await fs.remove(splitDir);
         }
-
-        await fs.remove(splitDir);
     } else {
         const fileName = path.basename(filePath);
 
