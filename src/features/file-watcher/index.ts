@@ -58,7 +58,6 @@ export async function watchAndTransferFiles() {
     try {
         async function transferFilesFromClient(client: TransferClient, sourceRemotePath: string) {
             const fileList = await client.list(sourceRemotePath);
-            console.debug(`Found ${fileList.length} files in source directory ${sourceRemotePath}`);
 
             for (const file of fileList) {
                 const fileName = file.name;
