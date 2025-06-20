@@ -64,11 +64,11 @@ class Settings {
           mssql: {
             server: '',
             database: '',
-            user: '',
+            username: '',
             password: '',
             options: {
               trustServerCertificate: true,
-              encrypt: false,
+              encrypt: true,
             },
           }
         }
