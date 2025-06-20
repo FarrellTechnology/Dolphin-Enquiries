@@ -5,9 +5,11 @@ import { format } from '@fast-csv/format';
 import { documentsFolder, fixTimestampFormat, initDbConnection, mapMSSQLTypeToSnowflakeType, settings } from '../../utils';
 import { Connection } from 'snowflake-sdk';
 import * as csvSplitStream from 'csv-split-stream';
+import readline from 'readline';
 
 let connection: sql.ConnectionPool | null = null;
 let config: any = null;
+let isRunning = false;
 
 function logMigrationStatus(
     tableName: string,
@@ -100,16 +102,39 @@ async function getAllTables() {
     return result.recordset;
 }
 
+async function getLineCount(filePath: string): Promise<number> {
+    return new Promise((resolve, reject) => {
+        let lineCount = 0;
+        const stream = fs.createReadStream(filePath);
+        const rl = readline.createInterface({ input: stream });
+
+        rl.on('line', () => lineCount++);
+        rl.on('close', () => resolve(lineCount));
+        rl.on('error', reject);
+    });
+}
+
 async function uploadAndCopyCSV(tableName: string, filePath: string, conn: Connection): Promise<void> {
     const stage = '@~';
-    const CHUNK_SIZE_MB = 100;
+    const CHUNK_SIZE_MB = 250;
 
     const stats = await fs.stat(filePath);
     const totalSizeMB = stats.size / (1024 * 1024);
 
     if (totalSizeMB > CHUNK_SIZE_MB) {
         console.log(`Splitting large CSV (${totalSizeMB.toFixed(1)}MB)...`);
-        
+
+        const totalLines = await getLineCount(filePath);
+        if (totalLines <= 1) {
+            throw new Error('CSV file has insufficient lines to split.');
+        }
+
+        const avgBytesPerLine = stats.size / totalLines;
+
+        const linesPerChunk = Math.floor((CHUNK_SIZE_MB * 1024 * 1024) / avgBytesPerLine);
+
+        console.log(`Total lines: ${totalLines}, splitting into chunks of approx ${linesPerChunk} lines (~${CHUNK_SIZE_MB}MB each)`);
+
         const splitDir = path.join(path.dirname(filePath), `${path.basename(filePath, '.csv')}_parts`);
         await fs.ensureDir(splitDir);
 
@@ -117,7 +142,7 @@ async function uploadAndCopyCSV(tableName: string, filePath: string, conn: Conne
             await csvSplitStream.split(
                 fs.createReadStream(filePath),
                 {
-                    lineLimit: 1000000,
+                    lineLimit: linesPerChunk,
                 },
                 (index: number) => fs.createWriteStream(path.join(splitDir, `part_${index}.csv`))
             );
@@ -227,48 +252,58 @@ async function batchRun<T>(
 }
 
 export async function getAllDataIntoSnowflake() {
-    const tables = await getAllTables();
-    console.log(`Total tables found: ${tables.length}`);
-    const conn = await initDbConnection(true);
-    const outputPath = './tmp_csvs';
+    if (isRunning) {
+        console.log('Migration is already running. Skipping this invocation.');
+        return;
+    }
+    isRunning = true;
 
-    await batchRun(tables, 10, async (table, index) => {
-        console.log(`Migrating table ${index + 1} of ${tables.length}: ${table.TABLE_SCHEMA}.${table.TABLE_NAME}`);
+    try {
+        const tables = await getAllTables();
+        console.log(`Total tables found: ${tables.length}`);
+        const conn = await initDbConnection(true);
+        const outputPath = './tmp_csvs';
 
-        const mssqlSchema = table.TABLE_SCHEMA;
-        const mssqlTableName = table.TABLE_NAME;
-        const snowflakeTableName = mssqlTableName;
+        await batchRun(tables, 10, async (table, index) => {
+            console.log(`Migrating table ${index + 1} of ${tables.length}: ${table.TABLE_SCHEMA}.${table.TABLE_NAME}`);
 
-        const csvPath = `${outputPath}/${snowflakeTableName}.csv`;
-        const startTime = Date.now();
+            const mssqlSchema = table.TABLE_SCHEMA;
+            const mssqlTableName = table.TABLE_NAME;
+            const snowflakeTableName = mssqlTableName;
 
-        try {
-            const tableExists = await doesTableExistInSnowflake(conn, snowflakeTableName);
+            const csvPath = `${outputPath}/${snowflakeTableName}.csv`;
+            const startTime = Date.now();
 
-            if (!tableExists) {
-                const createSQL = await generateCreateTableSQL(table.TABLE_SCHEMA, table.TABLE_NAME);
-                await new Promise<void>((resolve, reject) => {
-                    conn.execute({
-                        sqlText: createSQL,
-                        complete: (err) => (err ? reject(err) : resolve()),
+            try {
+                const tableExists = await doesTableExistInSnowflake(conn, snowflakeTableName);
+
+                if (!tableExists) {
+                    const createSQL = await generateCreateTableSQL(table.TABLE_SCHEMA, table.TABLE_NAME);
+                    await new Promise<void>((resolve, reject) => {
+                        conn.execute({
+                            sqlText: createSQL,
+                            complete: (err) => (err ? reject(err) : resolve()),
+                        });
                     });
-                });
-                console.log(`Created missing table: PUBLIC.${snowflakeTableName}`);
+                    console.log(`Created missing table: PUBLIC.${snowflakeTableName}`);
+                }
+
+                await exportTableToCSV(mssqlSchema, mssqlTableName, outputPath);
+                await uploadAndCopyCSV(snowflakeTableName, csvPath, conn);
+
+                const timeTaken = Date.now() - startTime;
+                logMigrationStatus(`PUBLIC.${snowflakeTableName}`, "SUCCESS", timeTaken);
+            } catch (error) {
+                const timeTaken = Date.now() - startTime;
+                logMigrationStatus(`PUBLIC.${snowflakeTableName}`, "FAILED", timeTaken, (error as Error).message);
+            } finally {
+                await fs.remove(csvPath);
             }
+        });
 
-            await exportTableToCSV(mssqlSchema, mssqlTableName, outputPath);
-            await uploadAndCopyCSV(snowflakeTableName, csvPath, conn);
-
-            const timeTaken = Date.now() - startTime;
-            logMigrationStatus(`PUBLIC.${snowflakeTableName}`, "SUCCESS", timeTaken);
-        } catch (error) {
-            const timeTaken = Date.now() - startTime;
-            logMigrationStatus(`PUBLIC.${snowflakeTableName}`, "FAILED", timeTaken, (error as Error).message);
-        } finally {
-            await fs.remove(csvPath)
-        }
-    });
-
-    console.log('All tables migrated to Snowflake');
+        console.log('All tables migrated to Snowflake');
+    } finally {
+        isRunning = false;
+    }
 }
 
