@@ -19,6 +19,51 @@ function logFileMovement(fileName: string, destinationFolder: string, timeTaken:
     });
 }
 
+const failureStorePath = path.join(documentsFolder(), "DolphinEnquiries", "failure-cache");
+
+function loadFailures(): { localFile: string; destRemoteFile: string; fileName: string }[] {
+    try {
+        if (fs.existsSync(failureStorePath)) {
+            const content = fs.readFileSync(failureStorePath, 'utf-8');
+            return JSON.parse(content);
+        }
+    } catch (err) {
+        console.error('Failed to load failure cache', err);
+    }
+    return [];
+}
+
+function saveFailures(failures: { localFile: string; destRemoteFile: string; fileName: string }[]) {
+    try {
+        const dir = path.dirname(failureStorePath);
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+        fs.writeFileSync(failureStorePath, JSON.stringify(failures, null, 2));
+    } catch (err) {
+        console.error('Failed to save failure cache', err);
+    }
+}
+
+async function tryUploadWithRetry(client: TransferClient, localFile: string, destRemoteFile: string, fileName: string, maxRetries = 3) {
+    let attempts = 0;
+    while (attempts < maxRetries) {
+        try {
+            await client.put(localFile, destRemoteFile);
+            console.debug(`Uploaded ${fileName} to client3 at ${destRemoteFile} (attempt ${attempts + 1})`);
+            return true;
+        } catch (err) {
+            attempts++;
+            console.warn(`Upload attempt ${attempts} failed for ${fileName}:`, err);
+            if (attempts >= maxRetries) {
+                return false;
+            }
+            await new Promise(res => setTimeout(res, 1000));
+        }
+    }
+    return false;
+}
+
 export async function watchAndTransferFiles() {
     const configOne = await settings.getSFTPConfigOne();
     const configTwo = await settings.getSFTPConfigTwo();
@@ -54,6 +99,7 @@ export async function watchAndTransferFiles() {
     isTransferring = true;
 
     let currentFile: string | null = null;
+    let failureCache = loadFailures();
 
     try {
         async function transferFilesFromClient(client: TransferClient, sourceRemotePath: string) {
@@ -90,16 +136,49 @@ export async function watchAndTransferFiles() {
                     await client.delete(remoteFile);
                     console.debug(`Deleted source file ${fileName} from ${sourceRemotePath}`);
 
-                    await client3.put(localFile, destRemoteFile);
-                    console.debug(`Uploaded ${fileName} to client3 at ${destRemoteFile}`);
+                    const success = await tryUploadWithRetry(client3, localFile, destRemoteFile, fileName);
 
-                    logFileMovement(fileName, destFolder, Date.now() - startTime);
-                    transferredFiles.add(fileName);
+                    if (!success) {
+                        console.error(`Failed to upload ${fileName} to client3 after multiple attempts.`);
+                        failureCache.push({ localFile, destRemoteFile, fileName });
+                        saveFailures(failureCache);
+                    } else {
+                        failureCache = failureCache.filter(f => f.fileName !== fileName);
+                        saveFailures(failureCache);
+
+                        logFileMovement(fileName, destFolder, Date.now() - startTime);
+                        transferredFiles.add(fileName);
+                    }
 
                     ping('EFR-Electron-Mover', { state: 'complete' });
 
                     currentFile = null;
                 }
+            }
+        }
+
+        if (failureCache.length > 0) {
+            console.log(`Retrying ${failureCache.length} failed uploads from previous runs...`);
+            for (const { localFile, destRemoteFile, fileName } of failureCache.slice()) {
+                currentFile = fileName;
+                ping('EFR-Electron-Mover', { state: 'run' });
+                ping('EFR-Electron-Uploading', { message: `Retry ${fileName}` });
+
+                const success = await tryUploadWithRetry(client3, localFile, destRemoteFile, fileName);
+                if (success) {
+                    failureCache = failureCache.filter(f => f.fileName !== fileName);
+                    saveFailures(failureCache);
+
+                    logFileMovement(fileName, path.posix.dirname(destRemoteFile), 0);
+                    transferredFiles.add(fileName);
+
+                    console.log(`Successfully retried upload for ${fileName}`);
+                    ping('EFR-Electron-Mover', { state: 'complete' });
+                } else {
+                    console.error(`Retry upload failed for ${fileName}`);
+                    ping('EFR-Electron-Mover', { state: 'fail', message: `Retry failed for ${fileName}` });
+                }
+                currentFile = null;
             }
         }
 
