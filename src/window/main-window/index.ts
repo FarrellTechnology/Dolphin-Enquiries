@@ -18,10 +18,10 @@ export function setIsQuitting(value: boolean) {
 
 export function createMainWindow() {
   mainWindow = new BrowserWindow({
-    width: 400,
-    height: 350,
+    width: 550,
+    height: 500,
     show: false,
-    resizable: false,
+    resizable: true,
     icon: nativeImage.createFromPath(
       assets.image(nativeTheme.shouldUseDarkColors ? "company-icon.png" : "company-icon-dark.png")
     ),
