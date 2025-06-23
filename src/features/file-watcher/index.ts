@@ -6,7 +6,7 @@ import { ping } from '..';
 let isTransferring = false;
 
 function logFileMovement(fileName: string, destinationFolder: string, timeTaken: number) {
-    const logDir = path.join(documentsFolder(), "DolphinEnquiries", "logs");
+    const logDir = path.join(documentsFolder(), "DolphinEnquiries", "logs", "file-movements");
     const logFile = path.join(logDir, `${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.txt`);
 
     if (!fs.existsSync(logDir)) {

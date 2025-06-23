@@ -23,10 +23,27 @@ export const assets = {
   js: (...segments: string[]) => resolveAppPath("js", ...segments),
 };
 
+export function determineReportMode(perDateCounts: Array<{ date: string }>): "monthly" | "weekly" | "daily" {
+  const dateStrings = perDateCounts.map(r => r.date);
+
+  const uniqueDates = [...new Set(dateStrings)].sort();
+  if (uniqueDates.length === 0) return 'daily';
+
+  const first = new Date(uniqueDates[0]);
+  const last = new Date(uniqueDates[uniqueDates.length - 1]);
+
+  const diffDays = Math.round((+last - +first) / (1000 * 60 * 60 * 24)) + 1;
+
+  if (diffDays <= 1) return 'daily';
+  if (diffDays <= 7) return 'weekly';
+  return 'monthly';
+}
+
 export async function loadEmailTemplate(
   perDateCounts: Array<{ date: string; leisureCount: number; golfCount: number }>,
   totalLeisure: number,
-  totalGolf: number
+  totalGolf: number,
+  mode: 'monthly' | 'weekly' | 'daily' = 'daily'
 ): Promise<string> {
   const templatePath = assets.template("email-template.html");
   let template = await fs.readFile(templatePath, "utf-8");
@@ -37,17 +54,12 @@ export async function loadEmailTemplate(
       .replace("{{showTable}}", "");
   }
 
-  const hasMultipleMonths = new Set(
-    perDateCounts.map((entry) => format(parseISO(entry.date), "yyyy-MM"))
-  ).size > 1;
-
   let summaryHeading = "";
   let dateHeader = "";
   let tableRows = "";
 
-  if (hasMultipleMonths) {
+  if (mode === 'monthly') {
     const grouped = new Map<string, { leisure: number; golf: number }>();
-
     for (const entry of perDateCounts) {
       const key = format(parseISO(entry.date), "MMMM yyyy");
       const prev = grouped.get(key) || { leisure: 0, golf: 0 };
@@ -56,10 +68,8 @@ export async function loadEmailTemplate(
         golf: prev.golf + entry.golfCount,
       });
     }
-
     summaryHeading = `Monthly overview for ${grouped.size} month(s)`;
     dateHeader = "Month";
-
     tableRows = Array.from(grouped.entries()).map(([month, counts]) => `
       <tr>
         <td>${month}</td>
@@ -68,13 +78,28 @@ export async function loadEmailTemplate(
         <td style="text-align: right;">${counts.leisure + counts.golf}</td>
       </tr>
     `).join("");
-  } else {
-    summaryHeading = `Daily report for ${format(parseISO(perDateCounts[0].date), "MMMM yyyy")}`;
+  } else if (mode === 'weekly') {
+    summaryHeading = `Weekly report for ${format(parseISO(perDateCounts[0].date), "dd MMMM yyyy")} - ${format(parseISO(perDateCounts[perDateCounts.length -1].date), "dd MMMM yyyy")}`;
     dateHeader = "Date";
-
     tableRows = perDateCounts.map(day => `
       <tr>
-        <td>${format(parseISO(day.date), "dd MMM yyyy")}</td>
+        <td>${format(parseISO(day.date), "EEE dd MMMM yyyy")}</td>
+        <td style="text-align: right;">${day.leisureCount}</td>
+        <td style="text-align: right;">${day.golfCount}</td>
+        <td style="text-align: right;">${day.leisureCount + day.golfCount}</td>
+      </tr>
+    `).join("");
+  } else {
+    const months = new Set(perDateCounts.map(e => format(parseISO(e.date), "yyyy-MM")));
+    if (months.size > 1) {
+      return loadEmailTemplate(perDateCounts, totalLeisure, totalGolf, 'monthly');
+    }
+
+    summaryHeading = `Daily report for ${format(parseISO(perDateCounts[0].date), "dd MMMM yyyy")}`;
+    dateHeader = "Date";
+    tableRows = perDateCounts.map(day => `
+      <tr>
+        <td>${format(parseISO(day.date), "dd MMMM yyyy")}</td>
         <td style="text-align: right;">${day.leisureCount}</td>
         <td style="text-align: right;">${day.golfCount}</td>
         <td style="text-align: right;">${day.leisureCount + day.golfCount}</td>
@@ -189,7 +214,6 @@ export function fixTimestampFormat(obj: Record<string, any>): Record<string, any
         const val = obj[key];
 
         if (val instanceof Date) {
-            // Format as Snowflake-compatible timestamp
             result[key] = val.toISOString().replace('T', ' ').replace('Z', '');
         } else if (typeof val === 'string') {
             if (val.includes('GMT')) {
@@ -198,7 +222,6 @@ export function fixTimestampFormat(obj: Record<string, any>): Record<string, any
                     ? val
                     : d.toISOString().replace('T', ' ').replace('Z', '');
             } else if (/^\d{4}-\d{2}-\d{2}T/.test(val)) {
-                // ISO string, possibly from DB
                 result[key] = val.replace('T', ' ').replace('Z', '');
             } else {
                 result[key] = val;
@@ -210,3 +233,28 @@ export function fixTimestampFormat(obj: Record<string, any>): Record<string, any
     return result;
 }
 
+export function getWeekDateStrings(today: Date): string[] {
+  const result: string[] = [];
+
+  const dayOfWeek = today.getDay();
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - ((dayOfWeek + 6) % 7));
+
+  const lastSaturday = new Date(monday);
+  lastSaturday.setDate(monday.getDate() - 2);
+  const lastSunday = new Date(monday);
+  lastSunday.setDate(monday.getDate() - 1);
+
+  const formatDate = (d: Date) => d.toISOString().slice(0, 10).replace(/-/g, "");
+
+  result.push(formatDate(lastSaturday));
+  result.push(formatDate(lastSunday));
+
+  for (let i = 0; i < 5; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    result.push(formatDate(d));
+  }
+
+  return result;
+}

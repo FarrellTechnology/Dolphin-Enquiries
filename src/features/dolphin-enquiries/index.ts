@@ -4,7 +4,7 @@ import fs from "fs/promises";
 import fsSync from "fs";
 import { ping, saveParsedTravelFolder, sendEmail } from "..";
 import { getMainWindow, updateTrayTooltip } from "../../window";
-import { assets, documentsFolder, loadEmailTemplate, runWithConcurrencyLimit } from "../../utils";
+import { assets, determineReportMode, documentsFolder, getWeekDateStrings, loadEmailTemplate, runWithConcurrencyLimit } from "../../utils";
 
 function isWithinPastNDays(folderName: string, days: number): boolean {
   if (!/^\d{8}$/.test(folderName)) return false;
@@ -82,24 +82,74 @@ async function parseFilesAndSendToDatabase(howLong: number): Promise<Array<{ dat
 }
 
 export async function checkDolphinFiles(howLong: number = 10): Promise<void> {
-  let counts: Array<{ date: string; leisureCount: number; golfCount: number }> = [];
+  const today = new Date();
+  const dateKey = today.toISOString().slice(0, 10).replace(/-/g, "");
+  const dateKeyFormatted = today.toISOString().split("T")[0];
+  const isFriday = today.getDay() === 5;
+  const weeklyStorePath = path.join(documentsFolder(), "DolphinEnquiries", "weekly-cache");
+
+  await fs.mkdir(weeklyStorePath, { recursive: true });
+
+  let todayCounts: Array<{ date: string; leisureCount: number; golfCount: number }> = [];
+
   try {
-    counts = await parseFilesAndSendToDatabase(howLong);
+    todayCounts = await parseFilesAndSendToDatabase(howLong);
+    const cacheFile = path.join(weeklyStorePath, `${dateKey}.json`);
+    await fs.writeFile(cacheFile, JSON.stringify(todayCounts, null, 2), "utf-8");
   } catch (err) {
     console.error("Error saving daily counts:", err);
-    counts = [];
+    todayCounts = [];
   }
 
-  updateTrayTooltip("Processed " + counts.length + " day(s)");
+
+  let reportCounts = todayCounts;
+  let subject = `Dolphin Enquiries Report for ${dateKeyFormatted}`;
+
+  if (isFriday) {
+    const weekDates = getWeekDateStrings(today);
+    reportCounts = [];
+
+    for (const day of weekDates) {
+      const file = path.join(weeklyStorePath, `${day}.json`);
+      try {
+        if (fsSync.existsSync(file)) {
+          const content = await fs.readFile(file, "utf-8");
+          const parsed = JSON.parse(content);
+          reportCounts.push(...parsed);
+        }
+      } catch (err) {
+        console.warn("Failed to read cached file for", day, err);
+      }
+    }
+
+    reportCounts.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    const formatDashedDate = (yyyymmdd: string) =>
+      `${yyyymmdd.slice(0, 4)}-${yyyymmdd.slice(4, 6)}-${yyyymmdd.slice(6, 8)}`;
+
+    subject = `Weekly Dolphin Enquiries Report (${formatDashedDate(weekDates[0])} to ${formatDashedDate(weekDates.at(-1)!)})`;
+
+    for (const day of weekDates) {
+      const file = path.join(weeklyStorePath, `${day}.json`);
+      try {
+        if (fsSync.existsSync(file)) await fs.unlink(file);
+      } catch (err) {
+        console.warn("Failed to delete cached file for", day, err);
+      }
+    }
+  }
+
+  updateTrayTooltip("Processed " + reportCounts.length + " day(s)");
 
   getMainWindow()?.loadFile(assets.template('report.html'));
   getMainWindow()?.webContents.once('did-finish-load', () => {
-    getMainWindow()?.webContents.send('report-data', { perDateCounts: counts });
+    getMainWindow()?.webContents.send('report-data', { perDateCounts: reportCounts });
   });
 
-  const totalLeisure = counts.reduce((sum, d) => sum + d.leisureCount, 0);
-  const totalGolf = counts.reduce((sum, d) => sum + d.golfCount, 0);
-  const html = await loadEmailTemplate(counts, totalLeisure, totalGolf);
+  const totalLeisure = reportCounts.reduce((sum, d) => sum + d.leisureCount, 0);
+  const totalGolf = reportCounts.reduce((sum, d) => sum + d.golfCount, 0);
+  const mode = determineReportMode(reportCounts);
+  const html = await loadEmailTemplate(reportCounts, totalLeisure, totalGolf, mode);
 
-  await sendEmail("Dolphin Enquiries Report", undefined, html);
+  await sendEmail(subject, undefined, html);
 }
