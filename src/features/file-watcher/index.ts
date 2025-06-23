@@ -19,7 +19,7 @@ function logFileMovement(fileName: string, destinationFolder: string, timeTaken:
     });
 }
 
-const failureStorePath = path.join(documentsFolder(), "DolphinEnquiries", "failure-cache");
+const failureStorePath = path.join(documentsFolder(), "DolphinEnquiries", "cache", "file-transfer-failures.json");
 
 function loadFailures(): { localFile: string; destRemoteFile: string; fileName: string }[] {
     try {
