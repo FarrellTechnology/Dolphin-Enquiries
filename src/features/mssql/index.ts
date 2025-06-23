@@ -10,6 +10,7 @@ import readline from 'readline';
 let connection: sql.ConnectionPool | null = null;
 let config: any = null;
 let isRunning = false;
+let errorOccurred = false;
 
 function logMigrationStatus(
     tableName: string,
@@ -189,13 +190,18 @@ async function uploadAndCopyCSV(tableName: string, filePath: string, conn: Conne
             await fs.remove(chunkPath);
         }
     } catch (err) {
+        errorOccurred = true;
         console.error(`Error during split-upload-copy: ${err}`);
         throw err;
     } finally {
-        try {
-            await fs.remove(splitDir);
-        } catch (cleanupErr) {
-            console.warn(`Failed to remove temp split directory '${splitDir}':`, cleanupErr);
+        if (!errorOccurred) {
+            try {
+                await fs.remove(splitDir);
+            } catch (cleanupErr) {
+                console.warn(`Failed to remove temp split directory '${splitDir}':`, cleanupErr);
+            }
+        } else {
+            console.log(`Keeping split CSV files in '${splitDir}' for diagnosis due to failure.`);
         }
     }
 }
