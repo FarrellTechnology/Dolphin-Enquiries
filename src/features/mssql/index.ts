@@ -194,15 +194,7 @@ async function uploadAndCopyCSV(tableName: string, filePath: string, conn: Conne
         console.error(`Error during split-upload-copy: ${err}`);
         throw err;
     } finally {
-        if (!errorOccurred) {
-            try {
-                await fs.remove(splitDir);
-            } catch (cleanupErr) {
-                console.warn(`Failed to remove temp split directory '${splitDir}':`, cleanupErr);
-            }
-        } else {
-            console.log(`Keeping split CSV files in '${splitDir}' for diagnosis due to failure.`);
-        }
+        await fs.remove(splitDir);
     }
 }
 
@@ -300,11 +292,17 @@ export async function getAllDataIntoSnowflake() {
                 logMigrationStatus(`PUBLIC.${snowflakeTableName}`, "SUCCESS", timeTaken);
                 successCount++;
             } catch (error) {
+                errorOccurred = true;
                 const timeTaken = Date.now() - startTime;
                 logMigrationStatus(`PUBLIC.${snowflakeTableName}`, "FAILED", timeTaken, (error as Error).message);
                 failedCount++;
             } finally {
-                await fs.remove(csvPath);
+                if (!errorOccurred) {
+                    console.log(`Successfully migrated table: ${snowflakeTableName}`);
+                    await fs.remove(csvPath);
+                } else {
+                    console.error(`Failed to migrate table: ${snowflakeTableName}`);
+                }
             }
         });
 
