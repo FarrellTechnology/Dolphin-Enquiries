@@ -243,8 +243,8 @@ export function fixTimestampFormat(obj: Record<string, any>): Record<string, any
       if (val === INVALID_PLACEHOLDER) {
         result[key] = null;
         continue;
-      } 
-      
+      }
+
       if (val.includes('GMT')) {
         d = new Date(val);
       } else if (/^\d{4}-\d{2}-\d{2}T/.test(val)) {
@@ -294,5 +294,9 @@ export function getWeekDateStrings(today: Date): string[] {
 }
 
 export function normalize(value: string): string {
-  return value.replace(/\s+/g, '_');
+  return value
+    .trim()
+    .replace(/[^a-zA-Z0-9_]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toUpperCase();
 }
