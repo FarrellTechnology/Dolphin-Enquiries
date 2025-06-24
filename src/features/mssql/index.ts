@@ -99,6 +99,9 @@ async function exportTableToCSV(schema: string, tableName: string, outputPath: s
 
         request.on('done', () => {
             csvStream.end();
+        });
+
+        csvStream.on('finish', () => {
             resolve();
         });
     });
@@ -209,6 +212,10 @@ async function mergeCsvIntoTable(conn: Connection, tableName: string, csvFilePat
 
     const chunkFolder = path.join(path.dirname(csvFilePath), 'chunks');
     await fs.ensureDir(chunkFolder);
+
+    const stats = await fs.stat(csvFilePath);
+    console.log(`CSV size for ${tableName}: ${stats.size} bytes`);
+    if (stats.size === 0) throw new Error('CSV file is empty');
 
     await new Promise<void>((resolve, reject) => {
         csvSplitStream.split(
