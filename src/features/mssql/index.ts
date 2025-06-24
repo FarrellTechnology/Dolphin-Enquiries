@@ -13,6 +13,7 @@ import {
 } from '../../utils';
 import { Connection } from 'snowflake-sdk';
 import csvSplitStream from 'csv-split-stream';
+import readline from 'readline';
 
 let connection: sql.ConnectionPool | null = null;
 let config: any = null;
@@ -204,6 +205,51 @@ async function generateCreateTableSQL(tableSchema: string, tableName: string): P
     return `CREATE TABLE PUBLIC.${normalize(tableName)} (\n  ${columns.join(',\n  ')}\n);`;
 }
 
+const MAX_CHUNK_SIZE_BYTES = 250 * 1024 * 1024; // 250MB
+
+async function splitCsvBySizeWithHeaders(inputCsv: string, outputDir: string, tableName: string): Promise<void> {
+    const headerLines: string[] = [];
+    let header: string | null = null;
+
+    await fs.ensureDir(outputDir);
+
+    const input = fs.createReadStream(inputCsv, { encoding: 'utf8' });
+    const rl = readline.createInterface({ input, crlfDelay: Infinity });
+
+    let currentChunkLines: string[] = [];
+    let currentSize = 0;
+    let chunkIndex = 0;
+
+    const writeChunk = async () => {
+        if (currentChunkLines.length === 0) return;
+
+        const chunkPath = path.join(outputDir, `${tableName}_${chunkIndex}.csv`);
+        const data = [header!, ...currentChunkLines].join('\n');
+        await fs.writeFile(chunkPath, data, 'utf8');
+        chunkIndex++;
+        currentChunkLines = [];
+        currentSize = 0;
+    };
+
+    for await (const line of rl) {
+        if (header === null) {
+            header = line;
+            continue;
+        }
+
+        const lineSize = Buffer.byteLength(line, 'utf8') + 1; // +1 for newline
+        if (currentSize + lineSize > MAX_CHUNK_SIZE_BYTES) {
+            await writeChunk();
+        }
+
+        currentChunkLines.push(line);
+        currentSize += lineSize;
+    }
+
+    await writeChunk(); // Write remaining lines
+    rl.close();
+}
+
 async function mergeCsvIntoTable(conn: Connection, tableName: string, csvFilePath: string): Promise<number> {
     const tempTable = `${tableName}_STAGING`;
     const stage = '@~';
@@ -217,16 +263,7 @@ async function mergeCsvIntoTable(conn: Connection, tableName: string, csvFilePat
     console.log(`CSV size for ${tableName}: ${stats.size} bytes`);
     if (stats.size === 0) throw new Error('CSV file is empty');
 
-    await new Promise<void>((resolve, reject) => {
-        csvSplitStream.split(
-            fs.createReadStream(csvFilePath),
-            { lineLimit: 10000, headers: true },
-            (index: number) => path.join(chunkFolder, `${tableName}_${index}.csv`)
-        )
-            .on('error', reject)
-            .on('finish', resolve);
-    });
-
+    await splitCsvBySizeWithHeaders(csvFilePath, chunkFolder, tableName);
 
     const chunkFiles = await fs.readdir(chunkFolder);
 
