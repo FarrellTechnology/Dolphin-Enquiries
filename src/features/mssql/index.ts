@@ -207,6 +207,20 @@ async function generateCreateTableSQL(tableSchema: string, tableName: string): P
 
 const MAX_CHUNK_SIZE_BYTES = 250 * 1024 * 1024; // 250MB
 
+async function getPrimaryKeyColumn(tableName: string): Promise<string | null> {
+    const pool = await connect();
+    const result = await pool.request().query(`
+        SELECT COLUMN_NAME
+        FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS AS TC
+        JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS KU
+          ON TC.CONSTRAINT_NAME = KU.CONSTRAINT_NAME
+        WHERE TC.TABLE_SCHEMA = DBA
+          AND TC.TABLE_NAME = '${tableName}'
+          AND TC.CONSTRAINT_TYPE = 'PRIMARY KEY'
+    `);
+    return result.recordset[0]?.COLUMN_NAME || null;
+}
+
 async function splitCsvBySizeWithHeaders(inputCsv: string, outputDir: string, tableName: string): Promise<void> {
     const headerLines: string[] = [];
     let header: string | null = null;
@@ -292,7 +306,8 @@ async function mergeCsvIntoTable(conn: Connection, tableName: string, csvFilePat
     if (columns.length === 0) {
         throw new Error(`No columns found for table ${tableName}`);
     }
-    const mergeKey = columns[0];
+    const pk = await getPrimaryKeyColumn(tableName);
+    const mergeKey = pk ?? columns[0];
     const updateSet = columns
         .filter(col => col !== mergeKey)
         .map(col => `target.${col} = source.${col}`)
