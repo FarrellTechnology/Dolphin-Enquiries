@@ -2,7 +2,7 @@ import sql from 'mssql';
 import fs from 'fs-extra';
 import path from 'path';
 import { format } from '@fast-csv/format';
-import { documentsFolder, fixTimestampFormat, initDbConnection, mapMSSQLTypeToSnowflakeType, runWithConcurrencyLimit, settings } from '../../utils';
+import { documentsFolder, fixTimestampFormat, initDbConnection, mapMSSQLTypeToSnowflakeType, normalize, runWithConcurrencyLimit, settings } from '../../utils';
 import { Connection } from 'snowflake-sdk';
 import * as csvSplitStream from 'csv-split-stream';
 import readline from 'readline';
@@ -91,8 +91,8 @@ async function exportTableToCSV(schema: string, tableName: string, outputPath: s
 
 function logQueryToFile(tableName: string, query: string): void {
     const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const logDir = path.join(documentsFolder(), "DolphinEnquiries", "logs", "mssql", "queries");
-    const logFile = path.join(logDir, `${dateStr}_${tableName}.log`);
+    const logDir = path.join(documentsFolder(), "DolphinEnquiries", "logs", "mssql", "queries", dateStr);
+    const logFile = path.join(logDir, `${tableName}.log`);
 
     if (!fs.existsSync(logDir)) {
         fs.mkdirSync(logDir, { recursive: true });
@@ -254,7 +254,7 @@ async function generateCreateTableSQL(tableSchema: string, tableName: string): P
         return `"${col.COLUMN_NAME}" ${typeWithLength}`;
     });
 
-    return `CREATE TABLE PUBLIC.${tableName} (\n  ${columns.join(',\n  ')}\n);`;
+    return `CREATE TABLE PUBLIC.${normalize(tableName)} (\n  ${columns.join(',\n  ')}\n);`;
 }
 
 
@@ -277,7 +277,7 @@ export async function getAllDataIntoSnowflake() {
         await runWithConcurrencyLimit(tables, 10, async (table) => {
             const mssqlSchema = table.TABLE_SCHEMA;
             const mssqlTableName = table.TABLE_NAME;
-            const snowflakeTableName = mssqlTableName;
+            const snowflakeTableName = normalize(mssqlTableName);
 
             const csvPath = `${outputPath}/${snowflakeTableName}.csv`;
             const startTime = Date.now();
@@ -287,7 +287,7 @@ export async function getAllDataIntoSnowflake() {
 
                 if (!tableExists) {
                     const createSQL = await generateCreateTableSQL(table.TABLE_SCHEMA, table.TABLE_NAME);
-                    logQueryToFile(table.TABLE_NAME, createSQL);
+                    logQueryToFile(snowflakeTableName, createSQL);
                     await new Promise<void>((resolve, reject) => {
                         conn.execute({
                             sqlText: createSQL,

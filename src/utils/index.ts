@@ -265,3 +265,7 @@ export function getWeekDateStrings(today: Date): string[] {
 
   return result;
 }
+
+export function normalize(value: string): string {
+    return value.replace(/\s+/g, '_');
+}
