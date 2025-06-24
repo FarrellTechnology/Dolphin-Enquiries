@@ -213,15 +213,13 @@ async function mergeCsvIntoTable(conn: Connection, tableName: string, csvFilePat
     await new Promise<void>((resolve, reject) => {
         csvSplitStream.split(
             fs.createReadStream(csvFilePath),
-            {
-                lineLimit: 10000,
-                headers: true
-            },
-            (index: any) => path.join(chunkFolder, `${tableName}_${index}.csv`)
+            { lineLimit: 10000, headers: true },
+            (index: number) => path.join(chunkFolder, `${tableName}_${index}.csv`)
         )
             .on('error', reject)
             .on('finish', resolve);
     });
+
 
     const chunkFiles = await fs.readdir(chunkFolder);
 
