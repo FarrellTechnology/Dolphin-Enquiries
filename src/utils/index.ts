@@ -217,6 +217,8 @@ export function mapMSSQLTypeToSnowflakeType(type: string): string {
 
 export function fixTimestampFormat(obj: Record<string, any>): Record<string, any> {
   const result: Record<string, any> = {};
+  const INVALID_PLACEHOLDER = '1970-01-01 00:00:00.000';
+
 
   for (const key in obj) {
     const val = obj[key];
@@ -238,6 +240,11 @@ export function fixTimestampFormat(obj: Record<string, any>): Record<string, any
     if (typeof val === 'string') {
       let d: Date | null = null;
 
+      if (val === INVALID_PLACEHOLDER) {
+        result[key] = null;
+        continue;
+      } 
+      
       if (val.includes('GMT')) {
         d = new Date(val);
       } else if (/^\d{4}-\d{2}-\d{2}T/.test(val)) {
