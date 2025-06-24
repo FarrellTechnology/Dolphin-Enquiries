@@ -212,6 +212,65 @@ async function uploadAndCopyCSV(tableName: string, filePath: string, conn: Conne
     }
 }
 
+async function mergeCsvIntoTable(conn: Connection, tableName: string, fileName: string) {
+    const tempTable = `${tableName}_STAGING`;
+    const stage = '@~';
+
+    await execSql(conn, `CREATE OR REPLACE TEMP TABLE ${tempTable} LIKE ${tableName}`);
+
+    await execSql(conn, `
+        COPY INTO ${tempTable}
+        FROM '${stage}/${fileName}'
+        FILE_FORMAT = (TYPE = 'CSV' FIELD_OPTIONALLY_ENCLOSED_BY='"' SKIP_HEADER=1)
+    `);
+
+    const columns = await getColumnList(conn, tableName);
+    const mergeKey = columns[0];
+
+    const updateSet = columns
+        .filter(col => col !== mergeKey)
+        .map(col => `target.${col} = source.${col}`)
+        .join(', ');
+
+    const columnList = columns.join(', ');
+
+    await execSql(conn, `
+        MERGE INTO ${tableName} AS target
+        USING ${tempTable} AS source
+        ON target.${mergeKey} = source.${mergeKey}
+        WHEN MATCHED THEN UPDATE SET ${updateSet}
+        WHEN NOT MATCHED THEN INSERT (${columnList}) VALUES (${columnList});
+    `);
+}
+
+async function execSql(conn: Connection, sql: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+        conn.execute({
+            sqlText: sql,
+            complete: (err) => (err ? reject(err) : resolve())
+        });
+    });
+}
+
+async function getColumnList(conn: Connection, tableName: string): Promise<string[]> {
+    return new Promise((resolve, reject) => {
+        conn.execute({
+            sqlText: `
+                SELECT COLUMN_NAME
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_NAME = UPPER('${tableName}')
+                AND TABLE_SCHEMA = CURRENT_SCHEMA()
+                ORDER BY ORDINAL_POSITION
+            `,
+            complete: (err, _stmt, rows: any) => {
+                if (err) return reject(err);
+                const columns = rows.map((r: any) => `"${r.COLUMN_NAME}"`);
+                resolve(columns);
+            }
+        });
+    });
+}
+
 async function doesTableExistInSnowflake(conn: Connection, tableName: string): Promise<boolean> {
     const schema = 'PUBLIC';
     const name = tableName;
@@ -301,7 +360,7 @@ export async function getAllDataIntoSnowflake() {
                 }
 
                 await exportTableToCSV(mssqlSchema, mssqlTableName, outputPath);
-                await uploadAndCopyCSV(snowflakeTableName, csvPath, conn);
+                await mergeCsvIntoTable(conn, snowflakeTableName, csvPath);
 
                 const timeTaken = Date.now() - startTime;
                 logMigrationStatus(`PUBLIC.${snowflakeTableName}`, "SUCCESS", timeTaken);
