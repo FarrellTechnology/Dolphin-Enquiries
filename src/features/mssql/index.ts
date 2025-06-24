@@ -55,7 +55,7 @@ async function connect() {
 async function exportTableToCSV(schema: string, tableName: string, outputPath: string) {
     const pool = await connect();
     const fullTableName = `[${schema}].[${tableName}]`;
-    const outputFile = `${outputPath}/${tableName}.csv`;
+    const outputFile = `${outputPath}/${normalize(tableName)}.csv`;
 
     await fs.ensureDir(outputPath);
     const ws = fs.createWriteStream(outputFile);
@@ -275,7 +275,7 @@ export async function getAllDataIntoSnowflake() {
         const tables = await getAllTables();
         console.log(`Total tables found: ${tables.length}`);
         const conn = await initDbConnection(true);
-        const outputPath = './tmp_csvs';
+        const outputPath = path.join(documentsFolder(), "DolphinEnquiries", "tmp", "csvs");
 
         await runWithConcurrencyLimit(tables, 10, async (table) => {
             const mssqlSchema = table.TABLE_SCHEMA;
@@ -289,7 +289,7 @@ export async function getAllDataIntoSnowflake() {
                 const tableExists = await doesTableExistInSnowflake(conn, snowflakeTableName);
 
                 if (!tableExists) {
-                    const createSQL = await generateCreateTableSQL(table.TABLE_SCHEMA, table.TABLE_NAME);
+                    const createSQL = await generateCreateTableSQL(mssqlSchema, mssqlTableName);
                     logQueryToFile(snowflakeTableName, createSQL);
                     await new Promise<void>((resolve, reject) => {
                         conn.execute({

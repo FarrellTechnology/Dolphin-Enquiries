@@ -86,7 +86,7 @@ export async function checkDolphinFiles(howLong: number = 10): Promise<void> {
   const dateKey = today.toISOString().slice(0, 10).replace(/-/g, "");
   const dateKeyFormatted = today.toISOString().split("T")[0];
   const isFriday = today.getDay() === 5;
-  const weeklyStorePath = path.join(documentsFolder(), "DolphinEnquiries", "weekly-cache");
+  const weeklyStorePath = path.join(documentsFolder(), "DolphinEnquiries", "cache", "weekly");
 
   await fs.mkdir(weeklyStorePath, { recursive: true });
 
