@@ -237,7 +237,7 @@ async function splitCsvBySizeWithHeaders(inputCsv: string, outputDir: string, ta
     const writeChunk = async () => {
         if (currentChunkLines.length === 0) return;
 
-        const chunkPath = path.join(outputDir, `${tableName}_${chunkIndex}.csv`);
+        const chunkPath = path.join(outputDir, `chunk_${chunkIndex}.csv`);
         const data = [header!, ...currentChunkLines].join('\n');
         await fs.writeFile(chunkPath, data, 'utf8');
         chunkIndex++;
@@ -270,7 +270,7 @@ async function mergeCsvIntoTable(conn: Connection, tableName: string, csvFilePat
 
     await execSql(conn, `CREATE OR REPLACE TEMP TABLE ${tempTable} LIKE ${tableName}`);
 
-    const chunkFolder = path.join(path.dirname(csvFilePath), 'chunks');
+    const chunkFolder = path.join(path.dirname(csvFilePath), 'chunks', tableName);
     await fs.ensureDir(chunkFolder);
 
     const stats = await fs.stat(csvFilePath);
@@ -295,7 +295,7 @@ async function mergeCsvIntoTable(conn: Connection, tableName: string, csvFilePat
 
             await fs.remove(chunkPath);
         } catch (error) {
-            console.error(`❌ Failed processing chunk ${chunkFile}:`, error);
+            console.error(`Failed processing chunk ${chunkFile} for ${tableName}:`, error);
             throw error;
         }
     });
