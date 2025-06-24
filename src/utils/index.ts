@@ -217,27 +217,46 @@ export function mapMSSQLTypeToSnowflakeType(type: string): string {
 
 export function fixTimestampFormat(obj: Record<string, any>): Record<string, any> {
   const result: Record<string, any> = {};
+
   for (const key in obj) {
     const val = obj[key];
 
+    if (val == null || val === '') {
+      result[key] = null;
+      continue;
+    }
+
     if (val instanceof Date) {
-      const formatted = val.toISOString().replace('T', ' ').replace('Z', '');
-      result[key] = formatted.startsWith('1970-01-01') ? null : formatted;
-    } else if (typeof val === 'string') {
+      if (isNaN(val.getTime())) {
+        result[key] = null;
+      } else {
+        result[key] = val.toISOString().replace('T', ' ').replace('Z', '');
+      }
+      continue;
+    }
+
+    if (typeof val === 'string') {
+      let d: Date | null = null;
+
       if (val.includes('GMT')) {
-        const d = new Date(val);
-        const formatted = d.toISOString().replace('T', ' ').replace('Z', '');
-        result[key] = isNaN(d.getTime()) || formatted.startsWith('1970-01-01') ? null : formatted;
+        d = new Date(val);
       } else if (/^\d{4}-\d{2}-\d{2}T/.test(val)) {
-        const formatted = val.replace('T', ' ').replace('Z', '');
-        result[key] = formatted.startsWith('1970-01-01') ? null : formatted;
+        d = new Date(val);
+      } else if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(val)) {
+        d = new Date(val.replace(' ', 'T') + 'Z');
+      }
+
+      if (d && !isNaN(d.getTime())) {
+        result[key] = d.toISOString().replace('T', ' ').replace('Z', '');
       } else {
         result[key] = val;
       }
-    } else {
-      result[key] = val;
+      continue;
     }
+
+    result[key] = val;
   }
+
   return result;
 }
 
