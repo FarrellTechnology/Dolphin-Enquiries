@@ -69,7 +69,10 @@ async function exportTableToCSV(schema: string, tableName: string, outputPath: s
         request.query(`SELECT * FROM ${fullTableName}`);
 
         request.on('row', (row) => {
-            const ok = csvStream.write(fixTimestampFormat(row));
+            const cleaned = Object.fromEntries(
+                Object.entries(row).map(([k, v]) => [k, typeof v === 'string' ? v.trim() : v])
+            );
+            const ok = csvStream.write(fixTimestampFormat(cleaned));
             if (!ok) {
                 request.pause();
                 csvStream.once('drain', () => request.resume());
