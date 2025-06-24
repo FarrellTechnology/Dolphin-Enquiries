@@ -10,7 +10,6 @@ import readline from 'readline';
 let connection: sql.ConnectionPool | null = null;
 let config: any = null;
 let isRunning = false;
-let errorOccurred = false;
 
 function logMigrationStatus(
     tableName: string,
@@ -88,6 +87,19 @@ async function exportTableToCSV(schema: string, tableName: string, outputPath: s
             resolve();
         });
     });
+}
+
+function logQueryToFile(tableName: string, query: string): void {
+    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const logDir = path.join(documentsFolder(), "DolphinEnquiries", "logs", "mssql", "queries");
+    const logFile = path.join(logDir, `${dateStr}_${tableName}.log`);
+
+    if (!fs.existsSync(logDir)) {
+        fs.mkdirSync(logDir, { recursive: true });
+    }
+
+    const entry = `${new Date().toLocaleTimeString()} - ${query}\n\n`;
+    fs.appendFileSync(logFile, entry);
 }
 
 async function getAllTables() {
@@ -190,7 +202,6 @@ async function uploadAndCopyCSV(tableName: string, filePath: string, conn: Conne
             await fs.remove(chunkPath);
         }
     } catch (err) {
-        errorOccurred = true;
         console.error(`Error during split-upload-copy: ${err}`);
         throw err;
     } finally {
@@ -276,6 +287,7 @@ export async function getAllDataIntoSnowflake() {
 
                 if (!tableExists) {
                     const createSQL = await generateCreateTableSQL(table.TABLE_SCHEMA, table.TABLE_NAME);
+                    logQueryToFile(table.TABLE_NAME, createSQL);
                     await new Promise<void>((resolve, reject) => {
                         conn.execute({
                             sqlText: createSQL,
@@ -292,17 +304,11 @@ export async function getAllDataIntoSnowflake() {
                 logMigrationStatus(`PUBLIC.${snowflakeTableName}`, "SUCCESS", timeTaken);
                 successCount++;
             } catch (error) {
-                errorOccurred = true;
                 const timeTaken = Date.now() - startTime;
                 logMigrationStatus(`PUBLIC.${snowflakeTableName}`, "FAILED", timeTaken, (error as Error).message);
                 failedCount++;
             } finally {
-                if (!errorOccurred) {
-                    console.log(`Successfully migrated table: ${snowflakeTableName}`);
-                    await fs.remove(csvPath);
-                } else {
-                    console.error(`Failed to migrate table: ${snowflakeTableName}`);
-                }
+                await fs.remove(csvPath);
             }
         });
 
