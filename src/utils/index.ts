@@ -188,9 +188,12 @@ export function mapMSSQLTypeToSnowflakeType(type: string): string {
         decimal: 'NUMBER',
         numeric: 'NUMBER',
         money: 'FLOAT',
+        smallmoney: 'FLOAT',
         float: 'FLOAT',
         real: 'FLOAT',
         datetime: 'TIMESTAMP_NTZ',
+        datetime2: 'TIMESTAMP_NTZ',
+        datetimeoffset: 'TIMESTAMP_TZ',
         smalldatetime: 'TIMESTAMP_NTZ',
         date: 'DATE',
         time: 'TIME',
@@ -202,7 +205,11 @@ export function mapMSSQLTypeToSnowflakeType(type: string): string {
         ntext: 'TEXT',
         binary: 'BINARY',
         varbinary: 'BINARY',
-        uniqueidentifier: 'VARCHAR'
+        image: 'BINARY',
+        xml: 'VARCHAR',
+        sql_variant: 'VARCHAR',
+        uniqueidentifier: 'STRING',
+        hierarchyid: 'VARCHAR'
     };
 
     return typeMap[type.toLowerCase()] || 'VARCHAR';
