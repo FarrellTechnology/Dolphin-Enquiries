@@ -4,8 +4,6 @@ import path from 'path';
 import { format } from '@fast-csv/format';
 import { documentsFolder, fixTimestampFormat, initDbConnection, mapMSSQLTypeToSnowflakeType, normalize, runWithConcurrencyLimit, settings } from '../../utils';
 import { Connection } from 'snowflake-sdk';
-import * as csvSplitStream from 'csv-split-stream';
-import readline from 'readline';
 
 let connection: sql.ConnectionPool | null = null;
 let config: any = null;
@@ -92,19 +90,6 @@ async function exportTableToCSV(schema: string, tableName: string, outputPath: s
     });
 }
 
-function logQueryToFile(tableName: string, query: string): void {
-    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const logDir = path.join(documentsFolder(), "DolphinEnquiries", "logs", "mssql", "queries", dateStr);
-    const logFile = path.join(logDir, `${tableName}.log`);
-
-    if (!fs.existsSync(logDir)) {
-        fs.mkdirSync(logDir, { recursive: true });
-    }
-
-    const entry = `${new Date().toLocaleTimeString()} - ${query}\n\n`;
-    fs.appendFileSync(logFile, entry);
-}
-
 async function getAllTables() {
     const pool = await connect();
 
@@ -116,100 +101,6 @@ async function getAllTables() {
 
     const result = await pool.request().query(query);
     return result.recordset;
-}
-
-async function getLineCount(filePath: string): Promise<number> {
-    return new Promise((resolve, reject) => {
-        let lineCount = 0;
-        const stream = fs.createReadStream(filePath);
-        const rl = readline.createInterface({ input: stream });
-
-        rl.on('line', () => lineCount++);
-        rl.on('close', () => resolve(lineCount));
-        rl.on('error', reject);
-    });
-}
-
-async function uploadAndCopyCSV(tableName: string, filePath: string, conn: Connection): Promise<void> {
-    const stage = '@~';
-    const CHUNK_SIZE_MB = 250;
-
-    const stats = await fs.stat(filePath);
-    const totalSizeMB = stats.size / (1024 * 1024);
-
-    if (totalSizeMB <= CHUNK_SIZE_MB) {
-        const fileName = path.basename(filePath);
-
-        await new Promise<void>((resolve, reject) => {
-            conn.execute({
-                sqlText: `PUT file://${filePath} ${stage} OVERWRITE = TRUE`,
-                complete: (err) => (err ? reject(err) : resolve()),
-            });
-        });
-
-        await new Promise<void>((resolve, reject) => {
-            conn.execute({
-                sqlText: `COPY INTO ${tableName} FROM ${stage}/${fileName} FILE_FORMAT = (TYPE = 'CSV' FIELD_OPTIONALLY_ENCLOSED_BY='"' SKIP_HEADER=1)`,
-                complete: (err) => (err ? reject(err) : resolve()),
-            });
-        });
-
-        return;
-    }
-
-    console.log(`Splitting large CSV (${totalSizeMB.toFixed(1)}MB)...`);
-
-    const totalLines = await getLineCount(filePath);
-    if (totalLines <= 1) {
-        throw new Error('CSV file has insufficient lines to split.');
-    }
-
-    const avgBytesPerLine = stats.size / totalLines;
-    const linesPerChunk = Math.floor((CHUNK_SIZE_MB * 1024 * 1024) / avgBytesPerLine);
-
-    console.log(`Total lines: ${totalLines}, splitting into chunks of approx ${linesPerChunk} lines (~${CHUNK_SIZE_MB}MB each)`);
-
-    const splitDir = path.join(path.dirname(filePath), `${path.basename(filePath, '.csv')}_parts`);
-    await fs.ensureDir(splitDir);
-
-    try {
-        await csvSplitStream.split(
-            fs.createReadStream(filePath),
-            {
-                lineLimit: linesPerChunk,
-                keepHeaders: true
-            },
-            (index: number) => fs.createWriteStream(path.join(splitDir, `part_${index}.csv`))
-        );
-
-        const chunkFiles = (await fs.readdir(splitDir)).filter(f => f.endsWith('.csv'));
-
-        for (const chunkFile of chunkFiles) {
-            const chunkPath = path.join(splitDir, chunkFile);
-            const stageFile = `${stage}/${chunkFile}`;
-
-            await new Promise<void>((resolve, reject) => {
-                conn.execute({
-                    sqlText: `PUT file://${chunkPath} ${stage} OVERWRITE = TRUE`,
-                    complete: (err) => (err ? reject(err) : resolve()),
-                });
-            });
-
-            await new Promise<void>((resolve, reject) => {
-                conn.execute({
-                    sqlText: `COPY INTO ${tableName} FROM '${stageFile}' FILE_FORMAT = (TYPE = 'CSV' FIELD_OPTIONALLY_ENCLOSED_BY='"' SKIP_HEADER=1)`,
-                    complete: (err) => (err ? reject(err) : resolve()),
-                });
-            });
-
-            await fs.remove(chunkPath);
-        }
-    } catch (err) {
-        console.error(`Error during split-upload-copy: ${err}`);
-        throw err;
-    } finally {
-        await fs.remove(splitDir);
-    }
 }
 
 async function mergeCsvIntoTable(conn: Connection, tableName: string, fileName: string) {
@@ -233,13 +124,14 @@ async function mergeCsvIntoTable(conn: Connection, tableName: string, fileName: 
         .join(', ');
 
     const columnList = columns.join(', ');
+    const insertValues = columns.map(col => `source.${col}`).join(', ');
 
     await execSql(conn, `
         MERGE INTO ${tableName} AS target
         USING ${tempTable} AS source
         ON target.${mergeKey} = source.${mergeKey}
         WHEN MATCHED THEN UPDATE SET ${updateSet}
-        WHEN NOT MATCHED THEN INSERT (${columnList}) VALUES (${columnList});
+        WHEN NOT MATCHED THEN INSERT (${columnList}) VALUES (${insertValues});
     `);
 }
 
@@ -319,7 +211,6 @@ async function generateCreateTableSQL(tableSchema: string, tableName: string): P
     return `CREATE TABLE PUBLIC.${normalize(tableName)} (\n  ${columns.join(',\n  ')}\n);`;
 }
 
-
 export async function getAllDataIntoSnowflake() {
     if (isRunning) {
         console.log('Migration is already running. Skipping this invocation.');
@@ -349,7 +240,6 @@ export async function getAllDataIntoSnowflake() {
 
                 if (!tableExists) {
                     const createSQL = await generateCreateTableSQL(mssqlSchema, mssqlTableName);
-                    logQueryToFile(snowflakeTableName, createSQL);
                     await new Promise<void>((resolve, reject) => {
                         conn.execute({
                             sqlText: createSQL,
@@ -381,4 +271,3 @@ export async function getAllDataIntoSnowflake() {
         isRunning = false;
     }
 }
-
