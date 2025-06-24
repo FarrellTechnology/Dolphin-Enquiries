@@ -79,7 +79,7 @@ export async function loadEmailTemplate(
       </tr>
     `).join("");
   } else if (mode === 'weekly') {
-    summaryHeading = `Weekly report for ${format(parseISO(perDateCounts[0].date), "dd MMMM yyyy")} - ${format(parseISO(perDateCounts[perDateCounts.length -1].date), "dd MMMM yyyy")}`;
+    summaryHeading = `Weekly report for ${format(parseISO(perDateCounts[0].date), "dd MMMM yyyy")} - ${format(parseISO(perDateCounts[perDateCounts.length - 1].date), "dd MMMM yyyy")}`;
     dateHeader = "Date";
     tableRows = perDateCounts.map(day => `
       <tr>
@@ -179,65 +179,66 @@ export async function runWithConcurrencyLimit<T>(
 }
 
 export function mapMSSQLTypeToSnowflakeType(type: string): string {
-    const typeMap: Record<string, string> = {
-        int: 'INTEGER',
-        bigint: 'BIGINT',
-        smallint: 'SMALLINT',
-        tinyint: 'SMALLINT',
-        bit: 'BOOLEAN',
-        decimal: 'NUMBER',
-        numeric: 'NUMBER',
-        money: 'FLOAT',
-        smallmoney: 'FLOAT',
-        float: 'FLOAT',
-        real: 'FLOAT',
-        datetime: 'TIMESTAMP_NTZ',
-        datetime2: 'TIMESTAMP_NTZ',
-        datetimeoffset: 'TIMESTAMP_TZ',
-        smalldatetime: 'TIMESTAMP_NTZ',
-        date: 'DATE',
-        time: 'TIME',
-        char: 'CHAR',
-        varchar: 'VARCHAR',
-        nchar: 'CHAR',
-        nvarchar: 'VARCHAR',
-        text: 'TEXT',
-        ntext: 'TEXT',
-        binary: 'BINARY',
-        varbinary: 'BINARY',
-        image: 'BINARY',
-        xml: 'VARCHAR',
-        sql_variant: 'VARCHAR',
-        uniqueidentifier: 'STRING',
-        hierarchyid: 'VARCHAR'
-    };
+  const typeMap: Record<string, string> = {
+    int: 'INTEGER',
+    bigint: 'BIGINT',
+    smallint: 'SMALLINT',
+    tinyint: 'SMALLINT',
+    bit: 'BOOLEAN',
+    decimal: 'NUMBER',
+    numeric: 'NUMBER',
+    money: 'FLOAT',
+    smallmoney: 'FLOAT',
+    float: 'FLOAT',
+    real: 'FLOAT',
+    datetime: 'TIMESTAMP_NTZ',
+    datetime2: 'TIMESTAMP_NTZ',
+    datetimeoffset: 'TIMESTAMP_TZ',
+    smalldatetime: 'TIMESTAMP_NTZ',
+    date: 'DATE',
+    time: 'TIME',
+    char: 'CHAR',
+    varchar: 'VARCHAR',
+    nchar: 'CHAR',
+    nvarchar: 'VARCHAR',
+    text: 'TEXT',
+    ntext: 'TEXT',
+    binary: 'BINARY',
+    varbinary: 'BINARY',
+    image: 'BINARY',
+    xml: 'VARCHAR',
+    sql_variant: 'VARCHAR',
+    uniqueidentifier: 'STRING',
+    hierarchyid: 'VARCHAR'
+  };
 
-    return typeMap[type.toLowerCase()] || 'VARCHAR';
+  return typeMap[type.toLowerCase()] || 'VARCHAR';
 }
 
 export function fixTimestampFormat(obj: Record<string, any>): Record<string, any> {
-    const result: Record<string, any> = {};
-    for (const key in obj) {
-        const val = obj[key];
+  const result: Record<string, any> = {};
+  for (const key in obj) {
+    const val = obj[key];
 
-        if (val instanceof Date) {
-            result[key] = val.toISOString().replace('T', ' ').replace('Z', '');
-        } else if (typeof val === 'string') {
-            if (val.includes('GMT')) {
-                const d = new Date(val);
-                result[key] = isNaN(d.getTime())
-                    ? val
-                    : d.toISOString().replace('T', ' ').replace('Z', '');
-            } else if (/^\d{4}-\d{2}-\d{2}T/.test(val)) {
-                result[key] = val.replace('T', ' ').replace('Z', '');
-            } else {
-                result[key] = val;
-            }
-        } else {
-            result[key] = val;
-        }
+    if (val instanceof Date) {
+      const formatted = val.toISOString().replace('T', ' ').replace('Z', '');
+      result[key] = formatted.startsWith('1970-01-01') ? null : formatted;
+    } else if (typeof val === 'string') {
+      if (val.includes('GMT')) {
+        const d = new Date(val);
+        const formatted = d.toISOString().replace('T', ' ').replace('Z', '');
+        result[key] = isNaN(d.getTime()) || formatted.startsWith('1970-01-01') ? null : formatted;
+      } else if (/^\d{4}-\d{2}-\d{2}T/.test(val)) {
+        const formatted = val.replace('T', ' ').replace('Z', '');
+        result[key] = formatted.startsWith('1970-01-01') ? null : formatted;
+      } else {
+        result[key] = val;
+      }
+    } else {
+      result[key] = val;
     }
-    return result;
+  }
+  return result;
 }
 
 export function getWeekDateStrings(today: Date): string[] {
@@ -267,5 +268,5 @@ export function getWeekDateStrings(today: Date): string[] {
 }
 
 export function normalize(value: string): string {
-    return value.replace(/\s+/g, '_');
+  return value.replace(/\s+/g, '_');
 }
