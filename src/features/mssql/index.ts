@@ -72,7 +72,7 @@ async function exportTableToCSV(schema: string, tableName: string, outputPath: s
 
     await fs.ensureDir(outputPath);
     const ws = fs.createWriteStream(outputFile, { encoding: 'utf8' });
-    const csvStream = format({ headers: true });
+    const csvStream = format({ headers: true, quote: '"', escape: '"' });
     csvStream.pipe(ws);
 
     const request = pool.request();
