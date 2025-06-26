@@ -207,21 +207,21 @@ async function generateCreateTableSQL(tableSchema: string, tableName: string): P
 
 const MAX_CHUNK_SIZE_BYTES = 250 * 1024 * 1024; // 250MB
 
-async function getPrimaryKeyColumn(tableName: string): Promise<string | null> {
+async function getPrimaryKeyColumn(schema: string, tableName: string): Promise<string | null> {
     const pool = await connect();
     const result = await pool.request().query(`
         SELECT COLUMN_NAME
         FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS AS TC
         JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE AS KU
           ON TC.CONSTRAINT_NAME = KU.CONSTRAINT_NAME
-        WHERE TC.TABLE_SCHEMA = DBA
+        WHERE TC.TABLE_SCHEMA = '${schema}'
           AND TC.TABLE_NAME = '${tableName}'
           AND TC.CONSTRAINT_TYPE = 'PRIMARY KEY'
     `);
     return result.recordset[0]?.COLUMN_NAME || null;
 }
 
-async function splitCsvBySizeWithHeaders(inputCsv: string, outputDir: string, tableName: string): Promise<void> {
+async function splitCsvBySizeWithHeaders(inputCsv: string, outputDir: string): Promise<void> {
     const headerLines: string[] = [];
     let header: string | null = null;
 
@@ -264,50 +264,51 @@ async function splitCsvBySizeWithHeaders(inputCsv: string, outputDir: string, ta
     rl.close();
 }
 
-async function mergeCsvIntoTable(conn: Connection, tableName: string, csvFilePath: string): Promise<number> {
-    const tempTable = `${tableName}_STAGING`;
+async function mergeCsvIntoTable(conn: Connection, schema: string, tableName: string, csvFilePath: string): Promise<number> {
+    const tempTable = `${normalize(tableName)}_STAGING`;
     const stage = '@~';
 
-    await execSql(conn, `CREATE OR REPLACE TEMP TABLE ${tempTable} LIKE ${tableName}`);
+    await execSql(conn, `CREATE OR REPLACE TEMP TABLE ${normalize(tempTable)} LIKE ${normalize(tableName)}`);
 
-    const chunkFolder = path.join(path.dirname(csvFilePath), 'chunks', tableName);
+    const chunkFolder = path.join(path.dirname(csvFilePath), 'chunks', normalize(tableName));
     await fs.ensureDir(chunkFolder);
 
     const stats = await fs.stat(csvFilePath);
-    console.log(`CSV size for ${tableName}: ${stats.size} bytes`);
+    console.log(`CSV size for ${normalize(tableName)}: ${stats.size} bytes`);
     if (stats.size === 0) throw new Error('CSV file is empty');
 
-    await splitCsvBySizeWithHeaders(csvFilePath, chunkFolder, tableName);
-
-    const chunkFiles = await fs.readdir(chunkFolder);
-
-    await runWithConcurrencyLimit(chunkFiles, 5, async (chunkFile) => {
-        const chunkPath = path.join(chunkFolder, chunkFile);
-
-        try {
-            await uploadFileToStage(conn, chunkPath, stage);
-
-            await execSql(conn, `
-            COPY INTO ${tempTable}
-            FROM '${stage}/${chunkFile}'
-            FILE_FORMAT = (TYPE = 'CSV' FIELD_OPTIONALLY_ENCLOSED_BY='"' SKIP_HEADER=1)
-        `);
-
-            await fs.remove(chunkPath);
-        } catch (error) {
-            console.error(`Failed processing chunk ${chunkFile} for ${tableName}:`, error);
-            throw error;
-        }
-    });
-
-    await fs.remove(chunkFolder);
+    await splitCsvBySizeWithHeaders(csvFilePath, chunkFolder);
 
     const columns = await getColumnList(conn, tableName);
     if (columns.length === 0) {
         throw new Error(`No columns found for table ${tableName}`);
     }
-    const pk = await getPrimaryKeyColumn(tableName);
+    const pk = await getPrimaryKeyColumn(schema, tableName);
     const mergeKey = pk ?? columns[0];
+
+    await uploadAllChunksToStage(conn, chunkFolder, stage);
+
+    try {
+        if (!columns.includes(mergeKey)) {
+            throw new Error(`Merge key column ${mergeKey} not found in Snowflake table ${tableName}`);
+        }
+
+        await execSql(conn, `
+            COPY INTO ${tempTable}
+            FROM '${stage}/..*\\.csv'
+            FILE_FORMAT = (TYPE = 'CSV' FIELD_OPTIONALLY_ENCLOSED_BY='"' SKIP_HEADER=1)
+        `);
+
+        await fs.remove(chunkFolder);
+    } catch (error) {
+        console.error(`Failed processing chunks for ${tableName}:`, error);
+        throw error;
+    } finally {
+        await execSql(conn, `DROP TABLE IF EXISTS ${tempTable}`);
+    }
+
+    await fs.remove(chunkFolder);
+
     const updateSet = columns
         .filter(col => col !== mergeKey)
         .map(col => `target.${col} = source.${col}`)
@@ -316,14 +317,19 @@ async function mergeCsvIntoTable(conn: Connection, tableName: string, csvFilePat
     const insertValues = columns.map(col => `source.${col}`).join(', ');
 
     const rowsAffected = await execSql(conn, `
-    MERGE INTO ${tableName} AS target
-    USING ${tempTable} AS source
-    ON target.${mergeKey} = source.${mergeKey}
-    WHEN MATCHED THEN UPDATE SET ${updateSet}
-    WHEN NOT MATCHED THEN INSERT (${columnList}) VALUES (${insertValues});
-  `);
+        MERGE INTO ${tableName} AS target
+        USING ${tempTable} AS source
+        ON target.${mergeKey} = source.${mergeKey}
+        WHEN MATCHED THEN UPDATE SET ${updateSet}
+        WHEN NOT MATCHED THEN INSERT (${columnList}) VALUES (${insertValues});
+    `);
 
     return rowsAffected;
+}
+
+async function uploadAllChunksToStage(conn: Connection, chunkDir: string, stageName: string) {
+    const command = `PUT file://${chunkDir}/*.csv ${stageName} AUTO_COMPRESS=FALSE PARALLEL=8`;
+    await execSql(conn, command);
 }
 
 async function uploadFileToStage(conn: Connection, localFilePath: string, stageName: string) {
@@ -365,7 +371,7 @@ export async function getAllDataIntoSnowflake() {
                 }
 
                 await exportTableToCSV(mssqlSchema, mssqlTableName, outputPath);
-                const rowsAffected = await mergeCsvIntoTable(conn, snowflakeTableName, csvPath);
+                const rowsAffected = await mergeCsvIntoTable(conn, mssqlSchema, mssqlTableName, csvPath);
 
                 const timeTaken = Date.now() - startTime;
                 logMigrationStatus(`PUBLIC.${snowflakeTableName}`, "SUCCESS", timeTaken, rowsAffected);
