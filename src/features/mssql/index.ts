@@ -289,7 +289,13 @@ async function loadCsvIntoTable(conn: Connection, tableName: string, csvFilePath
             COPY INTO ${tempTable}
             FROM '@~'
             PATTERN = '.*_chunk_.*\\.csv\\.gz'
-            FILE_FORMAT = (TYPE = 'CSV' FIELD_OPTIONALLY_ENCLOSED_BY='"' SKIP_HEADER=1 COMPRESSION = 'GZIP')
+            FILE_FORMAT = (
+                TYPE = 'CSV'
+                FIELD_OPTIONALLY_ENCLOSED_BY='"'
+                SKIP_HEADER = 1
+                COMPRESSION = 'GZIP'
+                NULL_IF = ('')
+            )
         `);
     } catch (error) {
         console.error(`Failed processing chunks for ${tableName}:`, error);
