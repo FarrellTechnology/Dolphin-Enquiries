@@ -1,6 +1,6 @@
 {
     "name": "dolphin-enquiries-tray",
-    "version": "1.0.67",
+    "version": "1.0.68",
     "main": "dist/main.js",
     "description": "A simple Electron app to send email notifications for Dolphin Enquiries.",
     "author": {
@@ -72,6 +72,7 @@
         "fast-csv": "^5.0.2",
         "fast-xml-parser": "^5.2.3",
         "fs-extra": "^11.3.0",
+        "glob": "^11.0.3",
         "he": "^1.2.0",
         "keytar": "^7.9.0",
         "mssql": "^11.0.1",

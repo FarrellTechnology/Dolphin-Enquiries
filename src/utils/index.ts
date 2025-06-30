@@ -1,11 +1,15 @@
 import path from "path";
-import fs from "fs/promises";
+import fs from "fs-extra";
 import { app } from "electron";
 import { format, parseISO } from "date-fns";
+import zlib from 'zlib';
+import { promisify } from 'util';
 
 export * from "./settings";
 export * from "./transfer-files";
 export * from "./snowflake";
+
+const gzip = promisify(zlib.gzip);
 
 function resolveAppPath(...segments: string[]): string {
   return app.isPackaged
@@ -299,4 +303,17 @@ export function normalize(value: string): string {
     .replace(/[^a-zA-Z0-9_]+/g, '_')
     .replace(/^_+|_+$/g, '')
     .toUpperCase();
+}
+
+export async function compressCsvChunks(chunkDir: string) {
+  const files = await fs.readdir(chunkDir);
+  for (const file of files) {
+    if (file.endsWith('.csv')) {
+      const filePath = path.join(chunkDir, file);
+      const fileContent = await fs.readFile(filePath);
+      const compressed = await gzip(fileContent);
+      await fs.writeFile(filePath + '.gz', compressed);
+      await fs.remove(filePath);
+    }
+  }
 }
