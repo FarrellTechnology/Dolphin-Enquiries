@@ -254,7 +254,7 @@ async function splitCsvBySizeWithHeaders(inputCsv: string, outputDir: string): P
     rl.close();
 }
 
-async function loadCsvIntoTable(conn: Connection, schema: string, tableName: string, csvFilePath: string): Promise<number> {
+async function loadCsvIntoTable(conn: Connection, tableName: string, csvFilePath: string): Promise<number> {
     const tempTable = `${normalize(tableName)}_STAGING`;
     const stage = '@~';
 
@@ -295,21 +295,29 @@ async function loadCsvIntoTable(conn: Connection, schema: string, tableName: str
     const stagingTable = `${mainTable}_STAGING`;
     const backupTable = `${mainTable}_OLD`;
 
-    await execSql(conn, `BEGIN TRANSACTION;`);
+    try {
+        await execSql(conn, `BEGIN TRANSACTION;`);
 
-    await execSql(conn, `ALTER TABLE ${mainTable} RENAME TO ${backupTable};`);
-    await execSql(conn, `ALTER TABLE ${stagingTable} RENAME TO ${mainTable};`);
+        await execSql(conn, `ALTER TABLE ${mainTable} RENAME TO ${backupTable};`);
+        await execSql(conn, `ALTER TABLE ${stagingTable} RENAME TO ${mainTable};`);
 
-    await execSql(conn, `DROP TABLE IF EXISTS ${backupTable};`);
-    await execSql(conn, `DROP TABLE IF EXISTS ${stagingTable};`);
+        await execSql(conn, `DROP TABLE IF EXISTS ${backupTable};`);
+        await execSql(conn, `DROP TABLE IF EXISTS ${stagingTable};`);
 
-    await execSql(conn, `COMMIT;`);
+        await execSql(conn, `COMMIT;`);
+
+    } catch (error) {
+        await execSql(conn, `ROLLBACK;`);
+        throw error;
+    }
+
+    await execSql(conn, `REMOVE @~ pattern='.*\\.csv\\.gz';`);
 
     return await execSql(conn, `SELECT COUNT(*) FROM ${mainTable};`);
 }
 
-async function uploadAllChunksToStage(conn: Connection, chunkDir: string, stageName: string) {
-    const files = globSync(`${chunkDir}/*.csv.gz`);
+async function uploadAllChunksToStage(conn: Connection, chunkFolder: string, stageName: string) {
+    const files = globSync(`${chunkFolder}/*.csv.gz`);
     for (const file of files) {
         const command = `PUT file://${file} ${stageName} AUTO_COMPRESS=FALSE`;
         console.log(`Uploading: ${file}`);
@@ -328,15 +336,15 @@ export async function getAllDataIntoSnowflake() {
     }
     isRunning = true;
 
+    const tables = await getAllTables();
+    console.log(`Total tables found: ${tables.length}`);
+    const outputPath = path.join(documentsFolder(), "DolphinEnquiries", "tmp", "csvs");
+    const conn = await initDbConnection(true);
+
     let successCount = 0;
     let failedCount = 0;
 
     try {
-        const tables = await getAllTables();
-        console.log(`Total tables found: ${tables.length}`);
-        const conn = await initDbConnection(true);
-        const outputPath = path.join(documentsFolder(), "DolphinEnquiries", "tmp", "csvs");
-
         await runWithConcurrencyLimit(tables, 10, async (table) => {
             const mssqlSchema = table.TABLE_SCHEMA;
             const mssqlTableName = table.TABLE_NAME;
@@ -355,7 +363,7 @@ export async function getAllDataIntoSnowflake() {
                 }
 
                 await exportTableToCSV(mssqlSchema, mssqlTableName, outputPath);
-                const rowsAffected = await loadCsvIntoTable(conn, mssqlSchema, mssqlTableName, csvPath);
+                const rowsAffected = await loadCsvIntoTable(conn, mssqlTableName, csvPath);
 
                 const timeTaken = Date.now() - startTime;
                 logMigrationStatus(`PUBLIC.${snowflakeTableName}`, "SUCCESS", timeTaken, rowsAffected);
@@ -364,15 +372,29 @@ export async function getAllDataIntoSnowflake() {
                 const timeTaken = Date.now() - startTime;
                 logMigrationStatus(`PUBLIC.${snowflakeTableName}`, "FAILED", timeTaken, undefined, (error as Error).message);
                 failedCount++;
-            } finally {
-                await fs.remove(csvPath);
             }
         });
-
-        console.log('All tables migrated to Snowflake');
-        console.log(`Success count: ${successCount}`);
-        console.log(`Failed count: ${failedCount}`);
     } finally {
+        try {
+            if (conn) {
+                conn.destroy((err) => {
+                    if (err) {
+                        console.error("Error closing Snowflake connection:", err);
+                    } else {
+                        console.log("Snowflake connection closed.");
+                    }
+                });
+            }
+
+            if (connection && connection.connected) {
+                await connection.close();
+                console.log("MSSQL connection closed.");
+            }
+        } catch (err) {
+            console.error("Error during connection cleanup:", err);
+        }
+
+        console.log(`Migration complete. Success: ${successCount}, Failed: ${failedCount}`);
         isRunning = false;
     }
 }
