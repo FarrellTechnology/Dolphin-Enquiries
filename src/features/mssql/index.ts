@@ -85,7 +85,7 @@ async function exportTableToCSV(schema: string, tableName: string, outputPath: s
 
         request.on('row', (row) => {
             const cleaned = Object.fromEntries(
-                Object.entries(row).map(([k, v]) => [k, typeof v === 'string' ? v.trim() : v])
+                Object.entries(row).map(([k, v]) => [k, typeof v === null ? '' : typeof v === 'string' ? v.trim() : v])
             );
             const ok = csvStream.write(fixTimestampFormat(cleaned));
             if (!ok) {
@@ -134,8 +134,13 @@ async function execSql(conn: Connection, sql: string): Promise<number> {
                     console.log(`Returned rows:`, rows);
                 }
                 try {
-                    const affectedRows = stmt?.getNumUpdatedRows?.() ?? 0;
-                    resolve(affectedRows);
+                    if (sql.trim().toUpperCase().startsWith("SELECT COUNT(*)")) {
+                        const count = parseInt(rows?.[0]?.['COUNT(*)'] || rows?.[0]?.['COUNT'] || '0', 10);
+                        resolve(count);
+                    } else {
+                        const affectedRows = stmt?.getNumUpdatedRows?.() ?? 0;
+                        resolve(affectedRows);
+                    }
                 } catch (e) {
                     resolve(0);
                 }
@@ -229,7 +234,7 @@ async function splitCsvBySizeWithHeaders(inputCsv: string, outputDir: string): P
 
         const chunkPath = path.join(outputDir, `chunk_${chunkIndex}.csv`);
         const data = [header!, ...currentChunkLines].join('\n');
-        await fs.writeFile(chunkPath, data, 'utf8');
+        await Promise.all([await fs.writeFile(chunkPath, data, 'utf8')]);
         chunkIndex++;
         currentChunkLines = [];
         currentSize = 0;
@@ -311,13 +316,22 @@ async function loadCsvIntoTable(conn: Connection, tableName: string, csvFilePath
         throw error;
     }
 
-    await execSql(conn, `REMOVE @~ pattern='.*\\.csv\\.gz';`);
+    try {
+        await execSql(conn, `REMOVE @~ pattern='.*\\.csv\\.gz';`);
+    } catch (error) {
+        console.error(`Failed to remove staged files:`, error);
+    }
 
     return await execSql(conn, `SELECT COUNT(*) FROM ${mainTable};`);
 }
 
 async function uploadAllChunksToStage(conn: Connection, chunkFolder: string, stageName: string) {
     const files = globSync(`${chunkFolder}/*.csv.gz`);
+
+    if (files.length === 0) {
+        throw new Error(`No compressed CSV chunks found for ${chunkFolder}`);
+    }
+
     for (const file of files) {
         const command = `PUT file://${file} ${stageName} AUTO_COMPRESS=FALSE`;
         console.log(`Uploading: ${file}`);
