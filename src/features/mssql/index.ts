@@ -129,6 +129,10 @@ async function execSql(conn: Connection, sql: string): Promise<number> {
             sqlText: sql,
             complete: (err, stmt, rows) => {
                 if (err) return reject(err);
+                console.log(`Executed SQL: ${sql}`);
+                if (rows?.length) {
+                    console.log(`Returned rows:`, rows);
+                }
                 try {
                     const affectedRows = stmt?.getNumUpdatedRows?.() ?? 0;
                     resolve(affectedRows);
@@ -271,6 +275,7 @@ async function loadCsvIntoTable(conn: Connection, schema: string, tableName: str
         throw new Error(`No columns found for table ${tableName}`);
     }
 
+    console.log(`Uploading chunks from ${chunkFolder} to stage ${stage}`);
     await uploadAllChunksToStage(conn, chunkFolder, stage);
 
     try {
@@ -279,11 +284,11 @@ async function loadCsvIntoTable(conn: Connection, schema: string, tableName: str
             FROM '${stage}/..*\\.csv.gz'
             FILE_FORMAT = (TYPE = 'CSV' FIELD_OPTIONALLY_ENCLOSED_BY='"' SKIP_HEADER=1 COMPRESSION = 'GZIP')
         `);
-
-        await fs.remove(chunkFolder);
     } catch (error) {
         console.error(`Failed processing chunks for ${tableName}:`, error);
         throw error;
+    } finally {
+        await fs.remove(chunkFolder);
     }
 
     const mainTable = normalize(tableName);
@@ -296,6 +301,7 @@ async function loadCsvIntoTable(conn: Connection, schema: string, tableName: str
     await execSql(conn, `ALTER TABLE ${stagingTable} RENAME TO ${mainTable};`);
 
     await execSql(conn, `DROP TABLE IF EXISTS ${backupTable};`);
+    await execSql(conn, `DROP TABLE IF EXISTS ${stagingTable};`);
 
     await execSql(conn, `COMMIT;`);
 
@@ -306,7 +312,12 @@ async function uploadAllChunksToStage(conn: Connection, chunkDir: string, stageN
     const files = globSync(`${chunkDir}/*.csv.gz`);
     for (const file of files) {
         const command = `PUT file://${file} ${stageName} AUTO_COMPRESS=FALSE`;
-        await execSql(conn, command);
+        console.log(`Uploading: ${file}`);
+        try {
+            await execSql(conn, command);
+        } catch (e) {
+            console.error(`Failed to PUT file ${file}:`, e);
+        }
     }
 }
 
