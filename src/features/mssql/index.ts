@@ -2,7 +2,7 @@ import sql from 'mssql';
 import fs from 'fs-extra';
 import path from 'path';
 import { format } from '@fast-csv/format';
-import glob from 'glob';
+import { globSync } from 'glob';
 import {
     compressCsvChunks,
     documentsFolder,
@@ -303,7 +303,7 @@ async function loadCsvIntoTable(conn: Connection, schema: string, tableName: str
 }
 
 async function uploadAllChunksToStage(conn: Connection, chunkDir: string, stageName: string) {
-    const files = glob.sync(`${chunkDir}/*.csv.gz`);
+    const files = globSync(`${chunkDir}/*.csv.gz`);
     for (const file of files) {
         const command = `PUT file://${file} ${stageName} AUTO_COMPRESS=FALSE`;
         await execSql(conn, command);
