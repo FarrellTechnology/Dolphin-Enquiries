@@ -217,7 +217,7 @@ async function generateCreateTableSQL(tableSchema: string, tableName: string): P
     return `CREATE TABLE PUBLIC.${normalize(tableName)} (\n  ${columns.join(',\n  ')}\n);`;
 }
 
-async function splitCsvBySizeWithHeaders(inputCsv: string, outputDir: string): Promise<void> {
+async function splitCsvBySizeWithHeaders(inputCsv: string, outputDir: string, tableName: string): Promise<void> {
     const headerLines: string[] = [];
     let header: string | null = null;
 
@@ -233,9 +233,9 @@ async function splitCsvBySizeWithHeaders(inputCsv: string, outputDir: string): P
     const writeChunk = async () => {
         if (currentChunkLines.length === 0) return;
 
-        const chunkPath = path.join(outputDir, `chunk_${chunkIndex}.csv`);
+        const chunkPath = path.join(outputDir, `${tableName}_chunk_${chunkIndex}.csv`);
         const data = [header!, ...currentChunkLines].join('\n');
-        await Promise.all([await fs.writeFile(chunkPath, data, 'utf8')]);
+        await fs.writeFile(chunkPath, data, 'utf8');
         chunkIndex++;
         currentChunkLines = [];
         currentSize = 0;
@@ -273,7 +273,7 @@ async function loadCsvIntoTable(conn: Connection, tableName: string, csvFilePath
     console.log(`CSV size for ${normalize(tableName)}: ${stats.size} bytes`);
     if (stats.size === 0) throw new Error('CSV file is empty');
 
-    await splitCsvBySizeWithHeaders(csvFilePath, chunkFolder);
+    await splitCsvBySizeWithHeaders(csvFilePath, chunkFolder, normalize(tableName));
     await compressCsvChunks(chunkFolder);
 
     const columns = await getColumnList(conn, tableName);
@@ -288,7 +288,7 @@ async function loadCsvIntoTable(conn: Connection, tableName: string, csvFilePath
         await execSql(conn, `
             COPY INTO ${tempTable}
             FROM '@~'
-            PATTERN = '.*\\.csv\\.gz'
+            PATTERN = '.*_chunk_.*\\.csv\\.gz'
             FILE_FORMAT = (TYPE = 'CSV' FIELD_OPTIONALLY_ENCLOSED_BY='"' SKIP_HEADER=1 COMPRESSION = 'GZIP')
         `);
     } catch (error) {
@@ -343,7 +343,7 @@ async function uploadChunkWithRetry(conn: Connection, file: string, stageName: s
 }
 
 async function uploadAllChunksToStage(conn: Connection, chunkFolder: string, stageName: string) {
-    const files = globSync(`${chunkFolder}/*.csv.gz`);
+    const files = globSync(`${chunkFolder}/*_chunk_*.csv.gz`);
     if (files.length === 0) throw new Error(`No compressed CSV chunks found for ${chunkFolder}`);
 
     for (const file of files) {
