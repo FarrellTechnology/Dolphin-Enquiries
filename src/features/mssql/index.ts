@@ -85,7 +85,7 @@ async function exportTableToCSV(schema: string, tableName: string, outputPath: s
 
         request.on('row', (row) => {
             const cleaned = Object.fromEntries(
-                Object.entries(row).map(([k, v]) => [k, typeof v === null ? '' : typeof v === 'string' ? v.trim() : v])
+                Object.entries(row).map(([k, v]) => [k, v === null ? '' : typeof v === 'string' ? v.trim() : v])
             );
             const ok = csvStream.write(fixTimestampFormat(cleaned));
             if (!ok) {
@@ -183,7 +183,8 @@ async function doesTableExistInSnowflake(conn: Connection, tableName: string): P
             sqlText: query,
             complete: (err, _stmt, rows) => {
                 if (err) return reject(err);
-                const exists = rows?.[0] && Object.values(rows[0])[0] === 1;
+                const count = rows?.[0]?.COUNT || rows?.[0]?.count || 0;
+                const exists = Number(count) > 0;
                 resolve(exists);
             }
         });
@@ -286,7 +287,8 @@ async function loadCsvIntoTable(conn: Connection, tableName: string, csvFilePath
     try {
         await execSql(conn, `
             COPY INTO ${tempTable}
-            FROM '${stage}/..*\\.csv.gz'
+            FROM '@~'
+            PATTERN = '.*\\.csv\\.gz'
             FILE_FORMAT = (TYPE = 'CSV' FIELD_OPTIONALLY_ENCLOSED_BY='"' SKIP_HEADER=1 COMPRESSION = 'GZIP')
         `);
     } catch (error) {
@@ -325,21 +327,27 @@ async function loadCsvIntoTable(conn: Connection, tableName: string, csvFilePath
     return await execSql(conn, `SELECT COUNT(*) FROM ${mainTable};`);
 }
 
-async function uploadAllChunksToStage(conn: Connection, chunkFolder: string, stageName: string) {
-    const files = globSync(`${chunkFolder}/*.csv.gz`);
-
-    if (files.length === 0) {
-        throw new Error(`No compressed CSV chunks found for ${chunkFolder}`);
-    }
-
-    for (const file of files) {
-        const command = `PUT file://${file} ${stageName} AUTO_COMPRESS=FALSE`;
-        console.log(`Uploading: ${file}`);
+async function uploadChunkWithRetry(conn: Connection, file: string, stageName: string, retries = 3) {
+    const command = `PUT file://${file} ${stageName} AUTO_COMPRESS=FALSE`;
+    for (let attempt = 1; attempt <= retries; attempt++) {
         try {
             await execSql(conn, command);
-        } catch (e) {
-            console.error(`Failed to PUT file ${file}:`, e);
+            console.log(`Uploaded chunk: ${file}`);
+            return;
+        } catch (err) {
+            console.warn(`Attempt ${attempt} failed for chunk ${file}: ${err}`);
+            if (attempt === retries) throw err;
+            await new Promise(res => setTimeout(res, 1000 * attempt));
         }
+    }
+}
+
+async function uploadAllChunksToStage(conn: Connection, chunkFolder: string, stageName: string) {
+    const files = globSync(`${chunkFolder}/*.csv.gz`);
+    if (files.length === 0) throw new Error(`No compressed CSV chunks found for ${chunkFolder}`);
+
+    for (const file of files) {
+        await uploadChunkWithRetry(conn, file, stageName);
     }
 }
 
@@ -359,7 +367,7 @@ export async function getAllDataIntoSnowflake() {
     let failedCount = 0;
 
     try {
-        await runWithConcurrencyLimit(tables, 10, async (table) => {
+        for (const table of tables) {
             const mssqlSchema = table.TABLE_SCHEMA;
             const mssqlTableName = table.TABLE_NAME;
             const snowflakeTableName = normalize(mssqlTableName);
@@ -387,7 +395,7 @@ export async function getAllDataIntoSnowflake() {
                 logMigrationStatus(`PUBLIC.${snowflakeTableName}`, "FAILED", timeTaken, undefined, (error as Error).message);
                 failedCount++;
             }
-        });
+        }
     } finally {
         try {
             if (conn) {
