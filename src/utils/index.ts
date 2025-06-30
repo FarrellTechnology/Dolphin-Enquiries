@@ -212,7 +212,7 @@ export function mapMSSQLTypeToSnowflakeType(type: string): string {
     image: 'BINARY',
     xml: 'VARCHAR',
     sql_variant: 'VARCHAR',
-    uniqueidentifier: 'STRING',
+    uniqueidentifier: 'VARCHAR(36)',
     hierarchyid: 'VARCHAR'
   };
 

@@ -262,7 +262,7 @@ async function splitCsvBySizeWithHeaders(inputCsv: string, outputDir: string, ta
 
 async function loadCsvIntoTable(conn: Connection, tableName: string, csvFilePath: string): Promise<number> {
     const tempTable = `${normalize(tableName)}_STAGING`;
-    const stage = '@~';
+    const stage = `@~/${normalize(tableName)}`;
 
     await execSql(conn, `CREATE OR REPLACE TRANSIENT TABLE ${normalize(tempTable)} LIKE ${normalize(tableName)}`);
 
@@ -287,7 +287,7 @@ async function loadCsvIntoTable(conn: Connection, tableName: string, csvFilePath
     try {
         await execSql(conn, `
             COPY INTO ${tempTable}
-            FROM '@~'
+            FROM '${stage}'
             PATTERN = '.*_chunk_.*\\.csv\\.gz'
             FILE_FORMAT = (
                 TYPE = 'CSV'
@@ -325,7 +325,7 @@ async function loadCsvIntoTable(conn: Connection, tableName: string, csvFilePath
     }
 
     try {
-        await execSql(conn, `REMOVE @~ pattern='.*\\.csv\\.gz';`);
+        await execSql(conn, `REMOVE ${stage} pattern='.*\\.csv\\.gz';`);
     } catch (error) {
         console.error(`Failed to remove staged files:`, error);
     }
