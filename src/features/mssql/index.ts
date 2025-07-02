@@ -260,6 +260,34 @@ async function splitCsvBySizeWithHeaders(inputCsv: string, outputDir: string, ta
     rl.close();
 }
 
+async function fixCsvChunksColumns(chunkDir: string, expectedColumnsCount: number) {
+    const files = await fs.readdir(chunkDir);
+
+    for (const file of files) {
+        if (file.endsWith('.csv')) {
+            const filePath = path.join(chunkDir, file);
+            const lines = (await fs.readFile(filePath, 'utf-8')).split('\n');
+
+            const fixedLines = lines.map(line => {
+                // Count columns by commas (CSV columns = commas + 1)
+                // Trim trailing \r or spaces for Windows compatibility
+                const trimmedLine = line.trimEnd().replace(/\r$/, '');
+                if (!trimmedLine) return line; // empty line, keep as is
+
+                const currentColumnsCount = trimmedLine.split(',').length;
+                if (currentColumnsCount < expectedColumnsCount) {
+                    // Add trailing commas to pad
+                    const missing = expectedColumnsCount - currentColumnsCount;
+                    return trimmedLine + ','.repeat(missing);
+                }
+                return line;
+            });
+
+            await fs.writeFile(filePath, fixedLines.join('\n'));
+        }
+    }
+}
+
 async function loadCsvIntoTable(conn: Connection, tableName: string, csvFilePath: string): Promise<number> {
     const tempTable = `${normalize(tableName)}_STAGING`;
     const stage = `@~/${normalize(tableName)}`;
@@ -273,13 +301,14 @@ async function loadCsvIntoTable(conn: Connection, tableName: string, csvFilePath
     console.log(`CSV size for ${normalize(tableName)}: ${stats.size} bytes`);
     if (stats.size === 0) throw new Error('CSV file is empty');
 
-    await splitCsvBySizeWithHeaders(csvFilePath, chunkFolder, normalize(tableName));
-    await compressCsvChunks(chunkFolder);
-
     const columns = await getColumnList(conn, tableName);
     if (columns.length === 0) {
         throw new Error(`No columns found for table ${tableName}`);
     }
+
+    await splitCsvBySizeWithHeaders(csvFilePath, chunkFolder, normalize(tableName));
+    await fixCsvChunksColumns(chunkFolder, columns.length);
+    await compressCsvChunks(chunkFolder);
 
     console.log(`Uploading chunks from ${chunkFolder} to stage ${stage}`);
     await uploadAllChunksToStage(conn, chunkFolder, stage);
