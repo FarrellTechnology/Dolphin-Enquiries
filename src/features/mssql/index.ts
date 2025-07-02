@@ -277,6 +277,8 @@ async function fixCsvChunksColumns(chunkDir: string, expectedColumnsCount: numbe
         relax_quotes: true,
         relax_column_count: true,
         skip_empty_lines: true,
+        delimiter: ',',
+        trim: true,
       });
     } catch (err) {
       console.error(`Failed to parse file ${file}:`, err);
@@ -284,10 +286,9 @@ async function fixCsvChunksColumns(chunkDir: string, expectedColumnsCount: numbe
     }
 
     const fixedRows = records.map(row => {
-      if (row.length < expectedColumnsCount) {
-        return [...row, ...Array(expectedColumnsCount - row.length).fill('')];
-      }
-      return row;
+      const trimmed = row.slice(0, expectedColumnsCount);
+      while (trimmed.length < expectedColumnsCount) trimmed.push('');
+      return trimmed;
     });
 
     const output = stringify(fixedRows, {
@@ -296,7 +297,7 @@ async function fixCsvChunksColumns(chunkDir: string, expectedColumnsCount: numbe
       record_delimiter: '\n',
     });
 
-    await fs.writeFile(filePath, output);
+    await fs.writeFile(filePath, output, 'utf-8');
   }
 }
 
