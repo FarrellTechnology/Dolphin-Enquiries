@@ -304,6 +304,57 @@ async function fixCsvChunksColumns(chunkDir: string, expectedColumnsCount: numbe
   }
 }
 
+async function validateAndSanitizeCsvChunks(chunkDir: string, expectedColumnsCount: number): Promise<void> {
+  const files = await fs.readdir(chunkDir);
+
+  for (const file of files) {
+    if (!file.endsWith('.csv')) continue;
+
+    const filePath = path.join(chunkDir, file);
+    const content = await fs.readFile(filePath, 'utf-8');
+
+    let records: string[][] = [];
+    try {
+      records = parse(content, {
+        columns: false,
+        skip_empty_lines: true,
+        relax_quotes: true,
+      });
+    } catch (err) {
+      console.error(`Failed to parse file ${file}:`, err);
+      continue;
+    }
+
+    let foundErrors = false;
+
+    const cleanedRecords = records.map((row, idx) => {
+      if (row.length !== expectedColumnsCount) {
+        console.error(`File ${file} Row ${idx + 1}: Expected ${expectedColumnsCount} columns but found ${row.length}`);
+        foundErrors = true;
+      }
+
+      return row.map(field => 
+        typeof field === 'string' 
+          ? field.replace(/[\r\n]+/g, ' ')
+          : field
+      );
+    });
+
+    if (foundErrors) {
+      console.warn(`File ${file} contains rows with incorrect column counts! Please review before upload.`);
+    }
+
+    const output = stringify(cleanedRecords, {
+      quoted: true,
+      quoted_empty: true,
+      record_delimiter: '\n',
+      escape: '"',
+    });
+
+    await fs.writeFile(filePath, output, 'utf-8');
+  }
+}
+
 async function loadCsvIntoTable(conn: Connection, tableName: string, csvFilePath: string): Promise<number> {
     const tempTable = `${normalize(tableName)}_STAGING`;
     const stage = `@~/${normalize(tableName)}`;
@@ -324,6 +375,7 @@ async function loadCsvIntoTable(conn: Connection, tableName: string, csvFilePath
 
     await splitCsvBySizeWithHeaders(csvFilePath, chunkFolder, normalize(tableName));
     await fixCsvChunksColumns(chunkFolder, columns.length);
+    await validateAndSanitizeCsvChunks(chunkFolder, columns.length);
     await compressCsvChunks(chunkFolder);
 
     console.log(`Uploading chunks from ${chunkFolder} to stage ${stage}`);
@@ -341,7 +393,7 @@ async function loadCsvIntoTable(conn: Connection, tableName: string, csvFilePath
                 SKIP_HEADER = 1
                 COMPRESSION = 'GZIP'
                 NULL_IF = ('')
-                ESCAPE = '\\'
+                EMPTY_FIELD_AS_NULL = TRUE
             )
         `);
     } catch (error) {
