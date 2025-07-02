@@ -336,10 +336,12 @@ async function loadCsvIntoTable(conn: Connection, tableName: string, csvFilePath
             PATTERN = '.*_chunk_.*\\.csv\\.gz'
             FILE_FORMAT = (
                 TYPE = 'CSV'
+                FIELD_DELIMITER = ','
                 FIELD_OPTIONALLY_ENCLOSED_BY='"'
                 SKIP_HEADER = 1
                 COMPRESSION = 'GZIP'
                 NULL_IF = ('')
+                ESCAPE = '\\'
             )
         `);
     } catch (error) {
