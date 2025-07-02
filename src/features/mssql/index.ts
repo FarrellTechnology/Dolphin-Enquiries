@@ -270,32 +270,25 @@ async function fixCsvChunksColumns(chunkDir: string, expectedColumnsCount: numbe
 
     const filePath = path.join(chunkDir, file);
     const content = await fs.readFile(filePath, 'utf-8');
-    const lines = content.split('\n');
 
-    const fixedRows: string[][] = [];
-
-    for (let line of lines) {
-      if (!line.trim()) continue;
-
-      let columns: string[];
-
-      try {
-        columns = parse(line, {
-          relax_quotes: true,
-          relax_column_count: true,
-          skip_empty_lines: true,
-        })[0];
-      } catch (err) {
-        console.warn(`Skipping unparsable line in ${file}: ${line}`);
-        continue;
-      }
-
-      if (columns.length < expectedColumnsCount) {
-        columns = [...columns, ...Array(expectedColumnsCount - columns.length).fill('')];
-      }
-
-      fixedRows.push(columns);
+    let records: string[][] = [];
+    try {
+      records = parse(content, {
+        relax_quotes: true,
+        relax_column_count: true,
+        skip_empty_lines: true,
+      });
+    } catch (err) {
+      console.error(`Failed to parse file ${file}:`, err);
+      continue;
     }
+
+    const fixedRows = records.map(row => {
+      if (row.length < expectedColumnsCount) {
+        return [...row, ...Array(expectedColumnsCount - row.length).fill('')];
+      }
+      return row;
+    });
 
     const output = stringify(fixedRows, {
       quoted: true,
