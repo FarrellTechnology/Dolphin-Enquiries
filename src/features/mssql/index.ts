@@ -276,29 +276,21 @@ async function fixCsvChunksColumns(chunkDir: string, expectedColumnsCount: numbe
       records = parse(content, {
         columns: false,
         skip_empty_lines: true,
-        delimiter: ',',
-        relax_quotes: false,
-        trim: true,
+        relax_quotes: true,
       });
     } catch (err) {
       console.error(`Failed to parse file ${file}:`, err);
       continue;
     }
 
-    const fixedRows = records.map((row, index) => {
+    const fixedRows = records.map(row => {
       if (row.length > expectedColumnsCount) {
-        const id = row[0];
-        const status = row[row.length - 2];
-        const runtime = row[row.length - 1];
-        const queryParts = row.slice(1, row.length - 2);
-        const query = queryParts.join(',');
-
-        return [id, query, status, runtime];
-      } else {
-        const trimmed = row.slice(0, expectedColumnsCount);
-        while (trimmed.length < expectedColumnsCount) trimmed.push('');
-        return trimmed;
+        console.warn(`Row with excess columns: expected ${expectedColumnsCount}, got ${row.length}`);
+        return row.slice(0, expectedColumnsCount);
+      } else if (row.length < expectedColumnsCount) {
+        return [...row, ...Array(expectedColumnsCount - row.length).fill('')];
       }
+      return row;
     });
 
     const output = stringify(fixedRows, {
