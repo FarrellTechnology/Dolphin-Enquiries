@@ -274,10 +274,10 @@ async function fixCsvChunksColumns(chunkDir: string, expectedColumnsCount: numbe
     let records: string[][] = [];
     try {
       records = parse(content, {
-        relax_quotes: true,
-        relax_column_count: true,
+        columns: false,
         skip_empty_lines: true,
         delimiter: ',',
+        relax_quotes: false,
         trim: true,
       });
     } catch (err) {
@@ -285,16 +285,27 @@ async function fixCsvChunksColumns(chunkDir: string, expectedColumnsCount: numbe
       continue;
     }
 
-    const fixedRows = records.map(row => {
-      const trimmed = row.slice(0, expectedColumnsCount);
-      while (trimmed.length < expectedColumnsCount) trimmed.push('');
-      return trimmed;
+    const fixedRows = records.map((row, index) => {
+      if (row.length > expectedColumnsCount) {
+        const id = row[0];
+        const status = row[row.length - 2];
+        const runtime = row[row.length - 1];
+        const queryParts = row.slice(1, row.length - 2);
+        const query = queryParts.join(',');
+
+        return [id, query, status, runtime];
+      } else {
+        const trimmed = row.slice(0, expectedColumnsCount);
+        while (trimmed.length < expectedColumnsCount) trimmed.push('');
+        return trimmed;
+      }
     });
 
     const output = stringify(fixedRows, {
       quoted: true,
       quoted_empty: true,
       record_delimiter: '\n',
+      escape: '"',
     });
 
     await fs.writeFile(filePath, output, 'utf-8');
