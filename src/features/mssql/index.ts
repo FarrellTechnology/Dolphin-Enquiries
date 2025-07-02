@@ -2,7 +2,8 @@ import sql from 'mssql';
 import fs from 'fs-extra';
 import path from 'path';
 import { format } from '@fast-csv/format';
-import { parse } from '@fast-csv/parse';
+import { parse } from 'csv-parse/sync';
+import { stringify } from 'csv-stringify/sync';
 import { globSync } from 'glob';
 import {
     compressCsvChunks,
@@ -261,19 +262,6 @@ async function splitCsvBySizeWithHeaders(inputCsv: string, outputDir: string, ta
     rl.close();
 }
 
-interface FixCsvChunksColumnsOptions {
-    chunkDir: string;
-    expectedColumnsCount: number;
-}
-
-function fixUnclosedQuotes(line: string): string {
-  const quoteCount = (line.match(/"/g) || []).length;
-  if (quoteCount % 2 !== 0) {
-    return line + '"';
-  }
-  return line;
-}
-
 async function fixCsvChunksColumns(chunkDir: string, expectedColumnsCount: number): Promise<void> {
   const files = await fs.readdir(chunkDir);
 
@@ -284,27 +272,37 @@ async function fixCsvChunksColumns(chunkDir: string, expectedColumnsCount: numbe
     const content = await fs.readFile(filePath, 'utf-8');
     const lines = content.split('\n');
 
-    const fixedLines: string[] = [];
+    const fixedRows: string[][] = [];
 
     for (let line of lines) {
-      if (!line.trim()) {
-        fixedLines.push(line);
+      if (!line.trim()) continue;
+
+      let columns: string[];
+
+      try {
+        columns = parse(line, {
+          relax_quotes: true,
+          relax_column_count: true,
+          skip_empty_lines: true,
+        })[0];
+      } catch (err) {
+        console.warn(`Skipping unparsable line in ${file}: ${line}`);
         continue;
       }
 
-      line = fixUnclosedQuotes(line);
+      if (columns.length < expectedColumnsCount) {
+        columns = [...columns, ...Array(expectedColumnsCount - columns.length).fill('')];
+      }
 
-      let columns = line.split(',');
-
-      const missing = expectedColumnsCount - columns.length;
-      for (let i = 0; i < missing; i++) columns.push('');
-
-      const rebuiltLine = columns.map(c => `"${c.replace(/"/g, '""')}"`).join(',');
-
-      fixedLines.push(rebuiltLine);
+      fixedRows.push(columns);
     }
 
-    await fs.writeFile(filePath, fixedLines.join('\n'));
+    const output = stringify(fixedRows, {
+      quoted: true,
+      record_delimiter: '\n',
+    });
+
+    await fs.writeFile(filePath, output);
   }
 }
 
