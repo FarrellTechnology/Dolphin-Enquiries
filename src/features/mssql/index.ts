@@ -266,65 +266,46 @@ interface FixCsvChunksColumnsOptions {
     expectedColumnsCount: number;
 }
 
-async function fixCsvChunksColumns(
-    chunkDir: string,
-    expectedColumnsCount: number
-): Promise<void> {
-    const files: string[] = await fs.readdir(chunkDir);
+function fixUnclosedQuotes(line: string): string {
+  const quoteCount = (line.match(/"/g) || []).length;
+  if (quoteCount % 2 !== 0) {
+    return line + '"';
+  }
+  return line;
+}
 
-    for (const file of files) {
-        if (!file.endsWith('.csv')) continue;
+async function fixCsvChunksColumns(chunkDir: string, expectedColumnsCount: number): Promise<void> {
+  const files = await fs.readdir(chunkDir);
 
-        const filePath: string = path.join(chunkDir, file);
-        const content: string = await fs.readFile(filePath, 'utf-8');
-        const lines: string[] = content.split('\n');
+  for (const file of files) {
+    if (!file.endsWith('.csv')) continue;
 
-        const fixedLines: string[] = [];
+    const filePath = path.join(chunkDir, file);
+    const content = await fs.readFile(filePath, 'utf-8');
+    const lines = content.split('\n');
 
-        for (const line of lines) {
-            if (!line.trim()) {
-                fixedLines.push(line);
-                continue;
-            }
+    const fixedLines: string[] = [];
 
-            const parsedColumns: string[] = await new Promise((resolve: (value: string[]) => void, reject) => {
-                const columns: string[][] = [];
-                const stream = parse({ headers: false, delimiter: ',', quote: '"' });
-                stream.on('error', reject);
-                stream.on('data', (row: string[]) => {
-                    columns.push(row);
-                });
-                stream.on('end', () => resolve(columns[0]));
-                stream.write(line);
-                stream.end();
-            });
+    for (let line of lines) {
+      if (!line.trim()) {
+        fixedLines.push(line);
+        continue;
+      }
 
-            const missing: number = expectedColumnsCount - parsedColumns.length;
-            if (missing > 0) {
-                for (let i = 0; i < missing; i++) {
-                    parsedColumns.push('');
-                }
-            }
+      line = fixUnclosedQuotes(line);
 
-            const formattedLine: string = await new Promise((resolve: (value: string) => void, reject) => {
-                let csvResult = '';
-                const stream = format({ headers: false, quoteColumns: true });
-                stream.on('error', reject);
-                stream.on('data', (chunk: Buffer | string) => {
-                    csvResult += chunk.toString();
-                });
-                stream.on('end', () => {
-                    resolve(csvResult.trimEnd());
-                });
-                stream.write(parsedColumns);
-                stream.end();
-            });
+      let columns = line.split(',');
 
-            fixedLines.push(formattedLine);
-        }
+      const missing = expectedColumnsCount - columns.length;
+      for (let i = 0; i < missing; i++) columns.push('');
 
-        await fs.writeFile(filePath, fixedLines.join('\n'));
+      const rebuiltLine = columns.map(c => `"${c.replace(/"/g, '""')}"`).join(',');
+
+      fixedLines.push(rebuiltLine);
     }
+
+    await fs.writeFile(filePath, fixedLines.join('\n'));
+  }
 }
 
 async function loadCsvIntoTable(conn: Connection, tableName: string, csvFilePath: string): Promise<number> {
@@ -337,11 +318,11 @@ async function loadCsvIntoTable(conn: Connection, tableName: string, csvFilePath
     await fs.ensureDir(chunkFolder);
 
     const stats = await fs.stat(csvFilePath);
-    console.log(`CSV size for ${normalize(tableName)}: ${stats.size} bytes`);
-    if (stats.size === 0) throw new Error('CSV file is empty');
-
     const columns = await getColumnList(conn, tableName);
-    if (columns.length === 0) {
+
+    console.log(`CSV size for ${normalize(tableName)}: ${stats.size} bytes`);
+
+    if (stats.size === 0 || columns.length === 0) {
         return 0;
     }
 
