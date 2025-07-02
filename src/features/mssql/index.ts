@@ -2,6 +2,7 @@ import sql from 'mssql';
 import fs from 'fs-extra';
 import path from 'path';
 import { format } from '@fast-csv/format';
+import { parse } from '@fast-csv/parse';
 import { globSync } from 'glob';
 import {
     compressCsvChunks,
@@ -260,31 +261,69 @@ async function splitCsvBySizeWithHeaders(inputCsv: string, outputDir: string, ta
     rl.close();
 }
 
-async function fixCsvChunksColumns(chunkDir: string, expectedColumnsCount: number) {
-    const files = await fs.readdir(chunkDir);
+interface FixCsvChunksColumnsOptions {
+    chunkDir: string;
+    expectedColumnsCount: number;
+}
+
+async function fixCsvChunksColumns(
+    chunkDir: string,
+    expectedColumnsCount: number
+): Promise<void> {
+    const files: string[] = await fs.readdir(chunkDir);
 
     for (const file of files) {
-        if (file.endsWith('.csv')) {
-            const filePath = path.join(chunkDir, file);
-            const lines = (await fs.readFile(filePath, 'utf-8')).split('\n');
+        if (!file.endsWith('.csv')) continue;
 
-            const fixedLines = lines.map(line => {
-                // Count columns by commas (CSV columns = commas + 1)
-                // Trim trailing \r or spaces for Windows compatibility
-                const trimmedLine = line.trimEnd().replace(/\r$/, '');
-                if (!trimmedLine) return line; // empty line, keep as is
+        const filePath: string = path.join(chunkDir, file);
+        const content: string = await fs.readFile(filePath, 'utf-8');
+        const lines: string[] = content.split('\n');
 
-                const currentColumnsCount = trimmedLine.split(',').length;
-                if (currentColumnsCount < expectedColumnsCount) {
-                    // Add trailing commas to pad
-                    const missing = expectedColumnsCount - currentColumnsCount;
-                    return trimmedLine + ','.repeat(missing);
-                }
-                return line;
+        const fixedLines: string[] = [];
+
+        for (const line of lines) {
+            if (!line.trim()) {
+                fixedLines.push(line);
+                continue;
+            }
+
+            const parsedColumns: string[] = await new Promise((resolve: (value: string[]) => void, reject) => {
+                const columns: string[][] = [];
+                const stream = parse({ headers: false, delimiter: ',', quote: '"' });
+                stream.on('error', reject);
+                stream.on('data', (row: string[]) => {
+                    columns.push(row);
+                });
+                stream.on('end', () => resolve(columns[0]));
+                stream.write(line);
+                stream.end();
             });
 
-            await fs.writeFile(filePath, fixedLines.join('\n'));
+            const missing: number = expectedColumnsCount - parsedColumns.length;
+            if (missing > 0) {
+                for (let i = 0; i < missing; i++) {
+                    parsedColumns.push('');
+                }
+            }
+
+            const formattedLine: string = await new Promise((resolve: (value: string) => void, reject) => {
+                let csvResult = '';
+                const stream = format({ headers: false, quoteColumns: true });
+                stream.on('error', reject);
+                stream.on('data', (chunk: Buffer | string) => {
+                    csvResult += chunk.toString();
+                });
+                stream.on('end', () => {
+                    resolve(csvResult.trimEnd());
+                });
+                stream.write(parsedColumns);
+                stream.end();
+            });
+
+            fixedLines.push(formattedLine);
         }
+
+        await fs.writeFile(filePath, fixedLines.join('\n'));
     }
 }
 
@@ -303,7 +342,7 @@ async function loadCsvIntoTable(conn: Connection, tableName: string, csvFilePath
 
     const columns = await getColumnList(conn, tableName);
     if (columns.length === 0) {
-        throw new Error(`No columns found for table ${tableName}`);
+        return 0;
     }
 
     await splitCsvBySizeWithHeaders(csvFilePath, chunkFolder, normalize(tableName));
