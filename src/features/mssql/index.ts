@@ -292,6 +292,7 @@ async function fixCsvChunksColumns(chunkDir: string, expectedColumnsCount: numbe
 
     const output = stringify(fixedRows, {
       quoted: true,
+      quoted_empty: true,
       record_delimiter: '\n',
     });
 
