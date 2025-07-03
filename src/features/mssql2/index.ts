@@ -11,7 +11,7 @@ import { initDbConnection, logToFile, settings } from "../../utils";
 import { Connection } from "snowflake-sdk";
 
 const execPromise = util.promisify(exec);
-const MAX_CHUNK_BYTES = 50 * 1024 * 1024; // 50 MB chunk size
+const MAX_CHUNK_BYTES = 50 * 1024 * 1024;
 
 let connection: ConnectionPool | null = null;
 let config: any = null;
@@ -55,7 +55,6 @@ class CsvChunker extends Transform {
         this.headers = headers;
         this.onChunkReady = onChunkReady;
 
-        // Push header row first
         this.push(headers.join(",") + "\n");
     }
 
@@ -103,10 +102,8 @@ class CsvChunker extends Transform {
         this.chunkBuffers = [];
         this.chunkSize = 0;
 
-        // Compress chunk
         const compressedData = zlib.gzipSync(chunkData);
 
-        // Write chunk to temp file
         const chunkFileName = `chunk_${uuidv4()}.csv.gz`;
         const chunkFilePath = path.join("/tmp", chunkFileName);
         await fs.writeFile(chunkFilePath, compressedData);
@@ -121,7 +118,6 @@ async function uploadChunkToSnowflakeStage(conn: Connection, stageName: string, 
     const fileName = path.basename(chunkPath);
     logToFile("mssql2", `Uploading ${fileName} to Snowflake stage ${stageName}`);
 
-    // Using snowsql CLI for PUT (since SDK lacks direct PUT)
     const putCmd = `PUT file://${chunkPath} @${stageName} AUTO_COMPRESS=TRUE`;
     try {
         conn.execute({
@@ -136,12 +132,80 @@ async function uploadChunkToSnowflakeStage(conn: Connection, stageName: string, 
     }
 }
 
+async function replaceSnowflakeTableWithStageData(
+    conn: Connection,
+    schema: string,
+    tableName: string,
+    stageName: string,
+    filePrefix: string
+) {
+    const stagingTable = `${schema}."${tableName}_STAGING"`;
+    const targetTable = `${schema}."${tableName}"`;
+    const stagePath = `@${stageName}/${filePrefix}`;
+
+    try {
+        conn.execute({
+            sqlText: `CREATE OR REPLACE TEMPORARY TABLE ${stagingTable} LIKE ${targetTable}`,
+            complete: (err) => {
+                if (err) throw err;
+            }
+        });
+
+        const copySql = `
+            COPY INTO ${stagingTable}
+            FROM ${stagePath}
+            FILE_FORMAT = (TYPE = 'CSV' FIELD_OPTIONALLY_ENCLOSED_BY = '"' SKIP_HEADER = 1 COMPRESSION = 'GZIP')
+            PURGE = TRUE
+            ON_ERROR = 'CONTINUE'
+        `;
+
+        conn.execute({
+            sqlText: copySql,
+            complete: (err) => {
+                if (err) throw err;
+            }
+        });
+
+        conn.execute({
+            sqlText: `TRUNCATE TABLE ${targetTable}`,
+            complete: (err) => {
+                if (err) throw err;
+            }
+        });
+
+        conn.execute({
+            sqlText: `INSERT INTO ${targetTable} SELECT * FROM ${stagingTable}`,
+            complete: (err) => {
+                if (err) throw err;
+            }
+        });
+
+        conn.execute({
+            sqlText: `DROP TABLE IF EXISTS ${stagingTable}`,
+            complete: (err) => {
+                if (err) throw err;
+            }
+        });
+
+        logToFile("mssql2", `Replaced table ${targetTable} with data loaded from stage ${stagePath}`);
+
+    } catch (error) {
+        let errorMsg = "";
+        if (error instanceof Error) {
+            errorMsg = error.message;
+        } else {
+            errorMsg = String(error);
+        }
+        logToFile("mssql2", `ERROR replacing table ${targetTable}: ${errorMsg}`);
+        throw error;
+    }
+}
+
 async function streamTableToChunks(tableName: string, stageName: string, conn: Connection | null) {
     const pool = await connect();
     const request = pool.request();
     request.stream = true;
 
-    // Get column headers
     const columnsResult = await pool.request().query(`SELECT * FROM ${tableName} WHERE 1=0`);
     const headers = Object.keys(columnsResult.recordset.columns);
 
@@ -182,10 +246,13 @@ export async function getAllDataIntoSnowflakeTwo() {
         for (const { TABLE_SCHEMA, TABLE_NAME } of tables) {
             const fullTableName = `[${TABLE_SCHEMA}].[${TABLE_NAME}]`;
             const snowflakeStage = "PUBLIC";
+            const cleanTableName = TABLE_NAME;
 
             logToFile("mssql2", `Starting streaming migration of ${fullTableName} to Snowflake stage ${snowflakeStage}`);
             await streamTableToChunks(fullTableName, snowflakeStage, sfConnection);
             logToFile("mssql2", `Finished streaming migration of ${fullTableName}`);
+
+            await replaceSnowflakeTableWithStageData(sfConnection, "PUBLIC", cleanTableName, snowflakeStage, "chunk_");
         }
 
         logToFile("mssql2", "All tables migrated successfully");
