@@ -313,9 +313,11 @@ async function loadCsvIntoTable(conn: Connection, tableName: string, csvFilePath
             FIELD_OPTIONALLY_ENCLOSED_BY = '"',
             SKIP_HEADER = 1,
             COMPRESSION = 'GZIP',
+            TRIM_SPACE = TRUE,
             NULL_IF = (''),
             EMPTY_FIELD_AS_NULL = TRUE
         )
+        ON_ERROR = 'CONTINUE'
     `);
 
     const backupTable = `${baseName}_OLD`;
