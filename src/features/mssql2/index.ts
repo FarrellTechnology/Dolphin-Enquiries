@@ -120,16 +120,22 @@ async function uploadChunkToSnowflakeStage(conn: Connection, stageName: string, 
 
     const putCmd = `PUT file://${chunkPath} @${stageName} AUTO_COMPRESS=TRUE`;
     try {
-        conn.execute({
-            sqlText: putCmd,
-            complete: function (err, stmt, rows) { }
-        });
+        await executeAsync(conn, putCmd);
         await fs.unlink(chunkPath);
         logToFile("mssql2", `Uploaded and deleted local chunk file ${fileName}`);
     } catch (error: any) {
         logToFile("mssql2", `ERROR uploading chunk ${fileName}: ${error.message || error}`);
         throw error;
     }
+}
+
+function executeAsync(conn: Connection, sqlText: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+        conn.execute({
+            sqlText,
+            complete: (err) => (err ? reject(err) : resolve()),
+        });
+    });
 }
 
 async function replaceSnowflakeTableWithStageData(
@@ -139,53 +145,23 @@ async function replaceSnowflakeTableWithStageData(
     stageName: string,
     filePrefix: string
 ) {
-    const stagingTable = `${schema}."${tableName}_STAGING"`;
-    const targetTable = `${schema}."${tableName}"`;
+    const stagingTable = `"DOLPHINDATA"."PUBLIC"."${tableName}_STAGING"`;
+    const targetTable = `"DOLPHINDATA"."PUBLIC"."${tableName}"`;
     const stagePath = `@${stageName}/${filePrefix}`;
 
     try {
-        conn.execute({
-            sqlText: `CREATE OR REPLACE TEMPORARY TABLE ${stagingTable} LIKE ${targetTable}`,
-            complete: (err) => {
-                if (err) throw err;
-            }
-        });
+        await executeAsync(conn, `CREATE OR REPLACE TEMPORARY TABLE ${stagingTable} LIKE ${targetTable}`);
 
-        const copySql = `
+        await executeAsync(conn, `
             COPY INTO ${stagingTable}
             FROM ${stagePath}
             FILE_FORMAT = (TYPE = 'CSV' FIELD_OPTIONALLY_ENCLOSED_BY = '"' SKIP_HEADER = 1 COMPRESSION = 'GZIP')
             PURGE = TRUE
             ON_ERROR = 'CONTINUE'
-        `;
-
-        conn.execute({
-            sqlText: copySql,
-            complete: (err) => {
-                if (err) throw err;
-            }
-        });
-
-        conn.execute({
-            sqlText: `TRUNCATE TABLE ${targetTable}`,
-            complete: (err) => {
-                if (err) throw err;
-            }
-        });
-
-        conn.execute({
-            sqlText: `INSERT INTO ${targetTable} SELECT * FROM ${stagingTable}`,
-            complete: (err) => {
-                if (err) throw err;
-            }
-        });
-
-        conn.execute({
-            sqlText: `DROP TABLE IF EXISTS ${stagingTable}`,
-            complete: (err) => {
-                if (err) throw err;
-            }
-        });
+        `);
+        await executeAsync(conn, `TRUNCATE TABLE ${targetTable}`);
+        await executeAsync(conn, `INSERT INTO ${targetTable} SELECT * FROM ${stagingTable}`);
+        await executeAsync(conn, `DROP TABLE IF EXISTS ${stagingTable}`);
 
         logToFile("mssql2", `Replaced table ${targetTable} with data loaded from stage ${stagePath}`);
 
