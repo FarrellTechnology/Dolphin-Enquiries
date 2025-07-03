@@ -181,7 +181,7 @@ export async function getAllDataIntoSnowflakeTwo() {
 
         for (const { TABLE_SCHEMA, TABLE_NAME } of tables) {
             const fullTableName = `[${TABLE_SCHEMA}].[${TABLE_NAME}]`;
-            const snowflakeStage = "your_snowflake_stage";
+            const snowflakeStage = "PUBLIC";
 
             logToFile("mssql2", `Starting streaming migration of ${fullTableName} to Snowflake stage ${snowflakeStage}`);
             await streamTableToChunks(fullTableName, snowflakeStage, sfConnection);
