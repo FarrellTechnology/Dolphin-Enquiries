@@ -1,5 +1,5 @@
 import { Tray, nativeTheme, nativeImage, Menu } from "electron";
-import { checkDolphinFiles, checkForUpdates, getAllDataIntoSnowflake } from "../../features";
+import { checkDolphinFiles, checkForUpdates, getAllDataIntoSnowflake, getAllDataIntoSnowflakeTwo } from "../../features";
 import { assets } from "../../utils";
 import { getMainWindow } from "../main-window";
 import { createSettingsWindow } from "../settings";
@@ -14,6 +14,7 @@ export function setupTray(onQuit: () => void) {
     { label: "Dolphin Enquiries", enabled: false },
     { label: "Check Dolphin Files Now", click: () => checkDolphinFiles().catch(console.error) },
     { label: "Upload MsSQL Files", click: () => getAllDataIntoSnowflake().catch(console.error) },
+    { label: "Upload MsSQL Files (V2)", click: () => getAllDataIntoSnowflakeTwo().catch(console.error) },
     { type: "separator" },
     { label: "Settings", click: () => createSettingsWindow() },
     { label: "Check for Updates", click: () => checkForUpdates() },
