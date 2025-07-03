@@ -72,43 +72,34 @@ async function connect() {
 async function exportTableToCSV(schema: string, tableName: string, outputPath: string) {
     const pool = await connect();
     const fullTableName = `[${schema}].[${tableName}]`;
-    const outputFile = `${outputPath}/${normalize(tableName)}.csv`;
-
     await fs.ensureDir(outputPath);
+    const outputFile = path.join(outputPath, `${normalize(tableName)}.csv`);
     const ws = fs.createWriteStream(outputFile, { encoding: 'utf8' });
     const csvStream = format({ headers: true, quote: '"', escape: '"' });
     csvStream.pipe(ws);
 
     const request = pool.request();
     request.stream = true;
+    request.query(`SELECT * FROM ${fullTableName}`);
 
     return new Promise<void>((resolve, reject) => {
-        request.query(`SELECT * FROM ${fullTableName}`);
-
         request.on('row', (row) => {
-            const cleaned = Object.fromEntries(
-                Object.entries(row).map(([k, v]) => [k, v === null ? '' : typeof v === 'string' ? v.trim() : v])
-            );
+            const cleaned = Object.fromEntries(Object.entries(row).map(([k, v]) =>
+                [k, v === null ? '' : typeof v === 'string' ? v.trim() : v]
+            ));
             const ok = csvStream.write(fixTimestampFormat(cleaned));
             if (!ok) {
                 request.pause();
                 csvStream.once('drain', () => request.resume());
             }
         });
-
-        request.on('error', (err) => {
+        request.on('error', err => {
             csvStream.end();
             ws.close();
             reject(err);
         });
-
-        request.on('done', () => {
-            csvStream.end();
-        });
-
-        csvStream.on('finish', () => {
-            resolve();
-        });
+        request.on('done', () => csvStream.end());
+        csvStream.on('finish', () => resolve());
     });
 }
 
@@ -219,240 +210,142 @@ async function generateCreateTableSQL(tableSchema: string, tableName: string): P
     return `CREATE TABLE PUBLIC.${normalize(tableName)} (\n  ${columns.join(',\n  ')}\n);`;
 }
 
-async function splitCsvBySizeWithHeaders(inputCsv: string, outputDir: string, tableName: string): Promise<void> {
-    const headerLines: string[] = [];
-    let header: string | null = null;
-
+async function splitCsvBySizeWithHeaders(inputCsv: string, outputDir: string, baseName: string, maxSize = MAX_CHUNK_SIZE_BYTES) {
     await fs.ensureDir(outputDir);
 
-    const input = fs.createReadStream(inputCsv, { encoding: 'utf8' });
-    const rl = readline.createInterface({ input, crlfDelay: Infinity });
+    const rl = readline.createInterface({
+        input: fs.createReadStream(inputCsv, 'utf8'),
+        crlfDelay: Infinity,
+    });
 
-    let currentChunkLines: string[] = [];
-    let currentSize = 0;
+    let header: string | null = null;
+    let chunkLines: string[] = [];
+    let chunkSize = 0;
     let chunkIndex = 0;
 
-    const writeChunk = async () => {
-        if (currentChunkLines.length === 0) return;
-
-        const chunkPath = path.join(outputDir, `${tableName}_chunk_${chunkIndex}.csv`);
-        const data = [header!, ...currentChunkLines].join('\n');
+    async function writeChunk() {
+        if (chunkLines.length === 0) return;
+        const chunkPath = path.join(outputDir, `${baseName}_chunk_${chunkIndex}.csv`);
+        const data = [header!, ...chunkLines].join('\n') + '\n';
         await fs.writeFile(chunkPath, data, 'utf8');
         chunkIndex++;
-        currentChunkLines = [];
-        currentSize = 0;
-    };
+        chunkLines = [];
+        chunkSize = 0;
+    }
 
     for await (const line of rl) {
-        if (header === null) {
+        if (!header) {
             header = line;
             continue;
         }
 
-        const lineSize = Buffer.byteLength(line, 'utf8') + 1;
-        if (currentSize + lineSize > MAX_CHUNK_SIZE_BYTES) {
+        const lineSize = Buffer.byteLength(line, 'utf8') + 1; // +1 for newline
+        if (chunkSize + lineSize > maxSize) {
             await writeChunk();
         }
 
-        currentChunkLines.push(line);
-        currentSize += lineSize;
+        chunkLines.push(line);
+        chunkSize += lineSize;
     }
 
     await writeChunk();
     rl.close();
 }
 
-async function fixCsvChunksColumns(chunkDir: string, expectedColumnsCount: number): Promise<void> {
-  const files = await fs.readdir(chunkDir);
+async function fixCsvChunksColumns(chunkDir: string, expectedCols: number) {
+    const files = await fs.readdir(chunkDir);
+    for (const file of files) {
+        if (!file.endsWith('.csv')) continue;
+        const filePath = path.join(chunkDir, file);
+        const content = await fs.readFile(filePath, 'utf8');
 
-  for (const file of files) {
-    if (!file.endsWith('.csv')) continue;
+        let records = parse(content, { columns: false, skip_empty_lines: true, relax_quotes: true });
 
-    const filePath = path.join(chunkDir, file);
-    const content = await fs.readFile(filePath, 'utf-8');
+        records = records.map((row: string | any[]) => {
+            if (row.length > expectedCols) return row.slice(0, expectedCols);
+            else if (row.length < expectedCols) return [...row, ...Array(expectedCols - row.length).fill('')];
+            return row;
+        });
 
-    let records: string[][] = [];
-    try {
-      records = parse(content, {
-        columns: false,
-        skip_empty_lines: true,
-        relax_quotes: true,
-      });
-    } catch (err) {
-      console.error(`Failed to parse file ${file}:`, err);
-      continue;
+        const output = stringify(records, { quoted: true, quoted_empty: true, record_delimiter: '\n', escape: '"' });
+        await fs.writeFile(filePath, output, 'utf8');
     }
-
-    const fixedRows = records.map(row => {
-      if (row.length > expectedColumnsCount) {
-        console.warn(`Row with excess columns: expected ${expectedColumnsCount}, got ${row.length}`);
-        return row.slice(0, expectedColumnsCount);
-      } else if (row.length < expectedColumnsCount) {
-        return [...row, ...Array(expectedColumnsCount - row.length).fill('')];
-      }
-      return row;
-    });
-
-    const output = stringify(fixedRows, {
-      quoted: true,
-      quoted_empty: true,
-      record_delimiter: '\n',
-      escape: '"',
-    });
-
-    await fs.writeFile(filePath, output, 'utf-8');
-  }
 }
 
-async function validateAndSanitizeCsvChunks(chunkDir: string, expectedColumnsCount: number): Promise<void> {
-  const files = await fs.readdir(chunkDir);
-
-  for (const file of files) {
-    if (!file.endsWith('.csv')) continue;
-
-    const filePath = path.join(chunkDir, file);
-    const content = await fs.readFile(filePath, 'utf-8');
-
-    let records: string[][] = [];
-    try {
-      records = parse(content, {
-        columns: false,
-        skip_empty_lines: true,
-        relax_quotes: true,
-      });
-    } catch (err) {
-      console.error(`Failed to parse file ${file}:`, err);
-      continue;
+async function uploadAllChunksToStage(conn: Connection, chunkDir: string, stage: string) {
+    const files = (await fs.readdir(chunkDir))
+        .filter(f => f.endsWith('.csv.gz'))
+        .map(f => path.join(chunkDir, f));
+    
+    for (const file of files) {
+        await uploadChunkWithRetry(conn, file, stage);
     }
-
-    let foundErrors = false;
-
-    const cleanedRecords = records.map((row, idx) => {
-      if (row.length !== expectedColumnsCount) {
-        console.error(`File ${file} Row ${idx + 1}: Expected ${expectedColumnsCount} columns but found ${row.length}`);
-        foundErrors = true;
-      }
-
-      return row.map(field => 
-        typeof field === 'string' 
-          ? field.replace(/[\r\n]+/g, ' ')
-          : field
-      );
-    });
-
-    if (foundErrors) {
-      console.warn(`File ${file} contains rows with incorrect column counts! Please review before upload.`);
-    }
-
-    const output = stringify(cleanedRecords, {
-      quoted: true,
-      quoted_empty: true,
-      record_delimiter: '\n',
-      escape: '"',
-    });
-
-    await fs.writeFile(filePath, output, 'utf-8');
-  }
 }
 
-async function loadCsvIntoTable(conn: Connection, tableName: string, csvFilePath: string): Promise<number> {
-    const tempTable = `${normalize(tableName)}_STAGING`;
-    const stage = `@~/${normalize(tableName)}`;
+async function loadCsvIntoTable(conn: Connection, tableName: string, csvFilePath: string) {
+    const baseName = normalize(tableName);
+    const tempTable = `${baseName}_STAGING`;
+    const stage = `@~/${baseName}`;
 
-    await execSql(conn, `CREATE OR REPLACE TRANSIENT TABLE ${normalize(tempTable)} LIKE ${normalize(tableName)}`);
+    await execSql(conn, `CREATE OR REPLACE TRANSIENT TABLE ${tempTable} LIKE ${baseName}`);
 
-    const chunkFolder = path.join(path.dirname(csvFilePath), 'chunks', normalize(tableName));
-    await fs.ensureDir(chunkFolder);
+    const chunkDir = path.join(path.dirname(csvFilePath), 'chunks', baseName);
+    await fs.ensureDir(chunkDir);
 
     const stats = await fs.stat(csvFilePath);
-    const columns = await getColumnList(conn, tableName);
+    if (stats.size === 0) return 0;
 
-    console.log(`CSV size for ${normalize(tableName)}: ${stats.size} bytes`);
+    const columns = await getColumnList(conn, baseName);
+    if (columns.length === 0) return 0;
 
-    if (stats.size === 0 || columns.length === 0) {
-        return 0;
-    }
+    await splitCsvBySizeWithHeaders(csvFilePath, chunkDir, baseName);
+    await fixCsvChunksColumns(chunkDir, columns.length);
+    await compressCsvChunks(chunkDir);
+    await uploadAllChunksToStage(conn, chunkDir, stage);
 
-    await splitCsvBySizeWithHeaders(csvFilePath, chunkFolder, normalize(tableName));
-    await fixCsvChunksColumns(chunkFolder, columns.length);
-    await validateAndSanitizeCsvChunks(chunkFolder, columns.length);
-    await compressCsvChunks(chunkFolder);
+    await execSql(conn, `
+        COPY INTO ${tempTable}
+        FROM '${stage}'
+        PATTERN = '.*_chunk_.*\\.csv\\.gz'
+        FILE_FORMAT = (
+            TYPE = 'CSV',
+            FIELD_DELIMITER = ',',
+            FIELD_OPTIONALLY_ENCLOSED_BY = '"',
+            SKIP_HEADER = 1,
+            COMPRESSION = 'GZIP',
+            NULL_IF = (''),
+            EMPTY_FIELD_AS_NULL = TRUE
+        )
+    `);
 
-    console.log(`Uploading chunks from ${chunkFolder} to stage ${stage}`);
-    await uploadAllChunksToStage(conn, chunkFolder, stage);
-
-    try {
-        await execSql(conn, `
-            COPY INTO ${tempTable}
-            FROM '${stage}'
-            PATTERN = '.*_chunk_.*\\.csv\\.gz'
-            FILE_FORMAT = (
-                TYPE = 'CSV'
-                FIELD_DELIMITER = ','
-                FIELD_OPTIONALLY_ENCLOSED_BY='"'
-                SKIP_HEADER = 1
-                COMPRESSION = 'GZIP'
-                NULL_IF = ('')
-                EMPTY_FIELD_AS_NULL = TRUE
-            )
-        `);
-    } catch (error) {
-        console.error(`Failed processing chunks for ${tableName}:`, error);
-        throw error;
-    } finally {
-        await fs.remove(chunkFolder);
-    }
-
-    const mainTable = normalize(tableName);
-    const stagingTable = `${mainTable}_STAGING`;
-    const backupTable = `${mainTable}_OLD`;
+    const backupTable = `${baseName}_OLD`;
+    await execSql(conn, 'BEGIN TRANSACTION;');
+    await execSql(conn, `ALTER TABLE ${baseName} RENAME TO ${backupTable};`);
+    await execSql(conn, `ALTER TABLE ${tempTable} RENAME TO ${baseName};`);
+    await execSql(conn, `DROP TABLE IF EXISTS ${backupTable};`);
+    await execSql(conn, 'COMMIT;');
 
     try {
-        await execSql(conn, `BEGIN TRANSACTION;`);
-
-        await execSql(conn, `ALTER TABLE ${mainTable} RENAME TO ${backupTable};`);
-        await execSql(conn, `ALTER TABLE ${stagingTable} RENAME TO ${mainTable};`);
-
-        await execSql(conn, `DROP TABLE IF EXISTS ${backupTable};`);
-        await execSql(conn, `DROP TABLE IF EXISTS ${stagingTable};`);
-
-        await execSql(conn, `COMMIT;`);
-
-    } catch (error) {
-        await execSql(conn, `ROLLBACK;`);
-        throw error;
+        await execSql(conn, `REMOVE ${stage} PATTERN='.*\\.csv\\.gz';`);
+        await execSql(conn, `DROP TABLE IF EXISTS ${tempTable};`);
+    } catch (err) {
+        console.warn('Failed to clear stage files', err);
     }
 
-    try {
-        await execSql(conn, `REMOVE ${stage} pattern='.*\\.csv\\.gz';`);
-    } catch (error) {
-        console.error(`Failed to remove staged files:`, error);
-    }
-
-    return await execSql(conn, `SELECT COUNT(*) FROM ${mainTable};`);
+    return await execSql(conn, `SELECT COUNT(*) FROM ${baseName};`);
 }
 
-async function uploadChunkWithRetry(conn: Connection, file: string, stageName: string, retries = 3) {
-    const command = `PUT file://${file} ${stageName} AUTO_COMPRESS=FALSE`;
-    for (let attempt = 1; attempt <= retries; attempt++) {
+async function uploadChunkWithRetry(conn: Connection, file: string, stage: string, maxRetries = 3) {
+    const command = `PUT file://${file} ${stage} AUTO_COMPRESS=FALSE`;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
             await execSql(conn, command);
-            console.log(`Uploaded chunk: ${file}`);
             return;
-        } catch (err) {
-            console.warn(`Attempt ${attempt} failed for chunk ${file}: ${err}`);
-            if (attempt === retries) throw err;
-            await new Promise(res => setTimeout(res, 1000 * attempt));
+        } catch (error) {
+            if (attempt === maxRetries) throw error;
+            console.warn(`Upload failed for ${file}, retrying ${attempt}/${maxRetries}...`);
+            await new Promise(r => setTimeout(r, 1000 * attempt));
         }
-    }
-}
-
-async function uploadAllChunksToStage(conn: Connection, chunkFolder: string, stageName: string) {
-    const files = globSync(`${chunkFolder}/*_chunk_*.csv.gz`);
-    if (files.length === 0) throw new Error(`No compressed CSV chunks found for ${chunkFolder}`);
-
-    for (const file of files) {
-        await uploadChunkWithRetry(conn, file, stageName);
     }
 }
 
