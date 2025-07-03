@@ -4,6 +4,7 @@ export * from "./dolphin-enquiries";
 export * from "./file-watcher";
 export * from "./mailer";
 export * from "./mssql";
+export * from "./mssql2";
 export * from "./scheduler";
 export * from "./updater";
 export * from "./cronitor";
