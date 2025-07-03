@@ -1,23 +1,9 @@
 import fs from 'fs';
 import path from 'path';
-import { documentsFolder, isRegularFile, settings, TransferClient } from '../../utils';
+import { documentsFolder, isRegularFile, logToFile, settings, TransferClient } from '../../utils';
 import { ping } from '..';
 
 let isTransferring = false;
-
-function logFileMovement(fileName: string, destinationFolder: string, timeTaken: number) {
-    const logDir = path.join(documentsFolder(), "DolphinEnquiries", "logs", "file-movements");
-    const logFile = path.join(logDir, `${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.txt`);
-
-    if (!fs.existsSync(logDir)) {
-        fs.mkdirSync(logDir, { recursive: true });
-    }
-
-    const logEntry = `${new Date().toLocaleTimeString()} - ${fileName} - ${destinationFolder} - ${timeTaken}ms\n`;
-    fs.appendFile(logFile, logEntry, (err) => {
-        if (err) console.error('Failed to write log', err);
-    });
-}
 
 const failureStorePath = path.join(documentsFolder(), "DolphinEnquiries", "cache", "file-transfer-failures.json");
 
@@ -146,7 +132,11 @@ export async function watchAndTransferFiles() {
                         failureCache = failureCache.filter(f => f.fileName !== fileName);
                         saveFailures(failureCache);
 
-                        logFileMovement(fileName, destFolder, Date.now() - startTime);
+                        logToFile(
+                            "file-movements",
+                            `${fileName} - ${destFolder} - ${Date.now() - startTime}ms`
+                        );
+
                         transferredFiles.add(fileName);
                     }
 
@@ -169,7 +159,11 @@ export async function watchAndTransferFiles() {
                     failureCache = failureCache.filter(f => f.fileName !== fileName);
                     saveFailures(failureCache);
 
-                    logFileMovement(fileName, path.posix.dirname(destRemoteFile), 0);
+                    logToFile(
+                        "file-movements",
+                        `${fileName} - ${path.posix.dirname(destRemoteFile)} - RETRY SUCCESS`
+                    );
+
                     transferredFiles.add(fileName);
 
                     console.log(`Successfully retried upload for ${fileName}`);

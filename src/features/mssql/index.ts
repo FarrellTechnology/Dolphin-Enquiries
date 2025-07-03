@@ -10,6 +10,7 @@ import {
     documentsFolder,
     fixTimestampFormat,
     initDbConnection,
+    logToFile,
     mapMSSQLTypeToSnowflakeType,
     normalize,
     runWithConcurrencyLimit,
@@ -30,31 +31,18 @@ function logMigrationStatus(
     rowsAffected?: number,
     errorMessage?: string
 ): void {
-    const logDir = path.join(documentsFolder(), "DolphinEnquiries", "logs", "mssql");
-    const logFile = path.join(logDir, `${new Date().toISOString().slice(0, 10).replace(/-/g, '')}.txt`);
-
-    if (!fs.existsSync(logDir)) {
-        fs.mkdirSync(logDir, { recursive: true });
-    }
-
-    let logEntry = `${new Date().toLocaleTimeString()} - ${tableName} - ${status} - ${timeTaken}ms`;
+    let logLine = `${tableName} - ${status} - ${timeTaken}ms`;
 
     if (rowsAffected !== undefined) {
-        logEntry += ` - Rows affected: ${rowsAffected}`;
+        logLine += ` - Rows affected: ${rowsAffected}`;
     }
 
     if (errorMessage && status === "FAILED") {
-        const sanitizedError = errorMessage.replace(/\s+/g, ' ').substring(0, 500);
-        logEntry += ` - ERROR: ${sanitizedError}`;
+        const sanitizedError = errorMessage.replace(/\s+/g, " ").substring(0, 500);
+        logLine += ` - ERROR: ${sanitizedError}`;
     }
 
-    logEntry += `\n`;
-
-    fs.appendFile(logFile, logEntry, (err) => {
-        if (err) {
-            console.error(`Failed to write log: ${err}`);
-        }
-    });
+    logToFile("mssql", logLine);
 }
 
 async function connect() {
@@ -276,7 +264,7 @@ async function uploadAllChunksToStage(conn: Connection, chunkDir: string, stage:
     const files = (await fs.readdir(chunkDir))
         .filter(f => f.endsWith('.csv.gz'))
         .map(f => path.join(chunkDir, f));
-    
+
     for (const file of files) {
         await uploadChunkWithRetry(conn, file, stage);
     }

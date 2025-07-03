@@ -8,6 +8,7 @@ import { promisify } from 'util';
 export * from "./settings";
 export * from "./transfer-files";
 export * from "./snowflake";
+export * from "./logger";
 
 const gzip = promisify(zlib.gzip);
 
