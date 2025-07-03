@@ -318,6 +318,7 @@ async function loadCsvIntoTable(conn: Connection, tableName: string, csvFilePath
             EMPTY_FIELD_AS_NULL = TRUE
         )
         ON_ERROR = 'CONTINUE'
+        VALIDATION_MODE = RETURN_ERRORS
     `);
 
     const backupTable = `${baseName}_OLD`;
