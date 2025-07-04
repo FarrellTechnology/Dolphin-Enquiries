@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from "uuid";
 import { exec } from "child_process";
 import util from "util";
 
-import { initDbConnection, logToFile, settings } from "../../utils";
+import { initDbConnection, logToFile, mapMSSQLTypeToSnowflakeType, settings } from "../../utils";
 import { Connection } from "snowflake-sdk";
 
 const execPromise = util.promisify(exec);
@@ -143,6 +143,38 @@ async function replaceSnowflakeTableWithStageData(conn: Connection, schema: stri
         logToFile("mssql2", `ERROR replacing table ${tableName}: ${msg}`);
         throw error;
     }
+}
+
+export async function ensureSnowflakeTableExists(
+  conn: Connection,
+  schema: string,
+  tableName: string,
+  mssqlColumns: { COLUMN_NAME: string; DATA_TYPE: string }[]
+): Promise<void> {
+  const tableIdentifier = `"${schema}"."${tableName}"`;
+
+  const columnsDefinition = mssqlColumns.map(col => {
+    const snowflakeType = mapMSSQLTypeToSnowflakeType(col.DATA_TYPE);
+    const colName = col.COLUMN_NAME.replace(/"/g, '""');
+    return `"${colName}" ${snowflakeType}`;
+  }).join(", ");
+
+  const createSql = `CREATE TABLE IF NOT EXISTS ${tableIdentifier} (${columnsDefinition})`;
+
+  return new Promise((resolve, reject) => {
+    conn.execute({
+      sqlText: createSql,
+      complete: (err) => {
+        if (err) {
+          console.error(`Failed to create Snowflake table ${tableIdentifier}:`, err.message);
+          reject(err);
+        } else {
+          console.log(`Ensured Snowflake table exists: ${tableIdentifier}`);
+          resolve();
+        }
+      }
+    });
+  });
 }
 
 async function streamTableToChunks(tableName: string, stageName: string, conn: Connection) {
