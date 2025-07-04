@@ -184,7 +184,7 @@ export async function getAllDataIntoSnowflakeTwo() {
         const tables = await getAllTables();
         logToFile("mssql2", `Starting migration of ${tables.length} tables`);
 
-        await Promise.allSettled(tables.slice(0, 5).map(async table => {
+        await Promise.allSettled(tables.map(async table => {
             const fullTableName = `[${table.TABLE_SCHEMA}].[${table.TABLE_NAME.replace(/]/g, ']]')}]`;
             const sanitizedTableName = table.TABLE_NAME.replace(/\s+/g, "_");
             const snowflakeStage = `migration_stage/${sanitizedTableName}`;
