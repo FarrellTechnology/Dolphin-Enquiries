@@ -106,7 +106,7 @@ async function uploadChunkToSnowflakeStage(conn: Connection, stageName: string, 
 
     logToFile("mssql2", `Uploading ${fileName} to Snowflake stage ${stageName}`);
 
-    const putCmd = `PUT file://${chunkPath} ${stageName}`;
+    const putCmd = `PUT file://${chunkPath} @${stageName}`;
 
     try {
         await executeAsync(conn, putCmd);
@@ -194,6 +194,7 @@ export async function getAllDataIntoSnowflakeTwo() {
             await streamTableToChunks(sanitizedTableName, snowflakeStage, sfConnection);
             await replaceSnowflakeTableWithStageData(sfConnection, "PUBLIC", sanitizedTableName, "migration_stage");
         }));
+
 
         logToFile("mssql2", "All tables migrated successfully");
     } catch (err: any) {
