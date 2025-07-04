@@ -105,7 +105,7 @@ async function uploadChunkToSnowflakeStage(conn: Connection, stageName: string, 
     const fileName = path.basename(chunkPath);
     logToFile("mssql2", `Uploading ${fileName} to Snowflake stage ${stageName}`);
 
-    const putCmd = `PUT file://${chunkPath} ${stageName} AUTO_COMPRESS=TRUE`;
+    const putCmd = `PUT file://${chunkPath} ${stageName}`;
     try {
         await executeAsync(conn, putCmd);
         await fs.unlink(chunkPath);
