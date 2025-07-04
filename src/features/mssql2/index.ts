@@ -145,8 +145,8 @@ async function replaceSnowflakeTableWithStageData(
     stageName: string,
     filePrefix: string
 ) {
-    const stagingTable = `"DOLPHINDATA"."PUBLIC"."${tableName}_STAGING"`;
-    const targetTable = `"DOLPHINDATA"."PUBLIC"."${tableName}"`;
+    const stagingTable = `${tableName}_STAGING`;
+    const targetTable = `${tableName}`;
     const stagePath = `@${stageName}/${filePrefix}`;
 
     try {
@@ -228,7 +228,7 @@ export async function getAllDataIntoSnowflakeTwo() {
             await streamTableToChunks(fullTableName, snowflakeStage, sfConnection);
             logToFile("mssql2", `Finished streaming migration of ${fullTableName}`);
 
-            await replaceSnowflakeTableWithStageData(sfConnection, "PUBLIC", cleanTableName, snowflakeStage, "chunk_");
+            await replaceSnowflakeTableWithStageData(sfConnection, snowflakeStage, cleanTableName, snowflakeStage, "chunk_");
         }
 
         logToFile("mssql2", "All tables migrated successfully");
