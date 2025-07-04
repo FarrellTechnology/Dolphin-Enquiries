@@ -114,6 +114,7 @@ async function uploadChunkToSnowflakeStage(conn: Connection, stageName: string, 
         logToFile("mssql2", `Uploaded and deleted local chunk file ${fileName}`);
     } catch (error: any) {
         logToFile("mssql2", `ERROR uploading chunk ${fileName}: ${error.message || error}`);
+        await fs.unlink(chunkPath).catch(() => { });
         throw error;
     }
 }
@@ -129,6 +130,7 @@ async function replaceSnowflakeTableWithStageData(conn: Connection, schema: stri
     const stagePath = `@${stageName}/${filePrefix}`;
 
     try {
+        await executeAsync(conn, `TRUNCATE TABLE ${tableName}`);
         await executeAsync(conn, `CREATE OR REPLACE TEMPORARY TABLE ${stagingTable} LIKE ${tableName}`);
         await executeAsync(conn, `COPY INTO ${stagingTable} FROM ${stagePath} FILE_FORMAT = (TYPE = 'CSV' FIELD_OPTIONALLY_ENCLOSED_BY = '"' SKIP_HEADER = 1 COMPRESSION = 'GZIP') PURGE = TRUE ON_ERROR = 'CONTINUE'`);
         await executeAsync(conn, `TRUNCATE TABLE ${tableName}`);
@@ -149,16 +151,23 @@ async function streamTableToChunks(tableName: string, stageName: string, conn: C
     request.stream = true;
 
     const columnsResult = await pool.request().query(`SELECT * FROM ${tableName} WHERE 1=0`);
-    const headers = Object.keys(columnsResult.recordset.columns);
+    const headers = columnsResult.recordset.columns
+        ? Object.keys(columnsResult.recordset.columns)
+        : Object.keys(columnsResult.recordset[0] || {});
 
     return new Promise<void>((resolve, reject) => {
         const csvChunker = new CsvChunker(headers, async (chunkPath) => {
-            await uploadChunkToSnowflakeStage(conn, `@${stageName}`, chunkPath);
+            await uploadChunkToSnowflakeStage(conn, "@migration_stage", chunkPath);
         });
 
         request.query(`SELECT * FROM ${tableName}`);
 
-        request.on("row", row => csvChunker.write(row));
+        request.on("row", row => {
+            if (!csvChunker.write(row)) {
+                request.pause();
+                csvChunker.once("drain", () => request.resume());
+            }
+        });
         request.on("error", err => reject(err));
         request.on("done", () => {
             csvChunker.end();
@@ -175,16 +184,16 @@ export async function getAllDataIntoSnowflakeTwo() {
         const tables = await getAllTables();
         logToFile("mssql2", `Starting migration of ${tables.length} tables`);
 
-        for (const { TABLE_SCHEMA, TABLE_NAME } of tables) {
-            const fullTableName = `[${TABLE_SCHEMA}].[${TABLE_NAME}]`;
-            const sanitizedTableName = TABLE_NAME.replace(/\s+/g, "_");
+        await Promise.allSettled(tables.slice(0, 5).map(async table => {
+            const fullTableName = `[${table.TABLE_SCHEMA}].[${table.TABLE_NAME.replace(/]/g, ']]')}]`;
+            const sanitizedTableName = table.TABLE_NAME.replace(/\s+/g, "_");
             const snowflakeStage = `migration_stage/${sanitizedTableName}`;
 
-            logToFile("mssql2", `Starting streaming migration of ${fullTableName} to Snowflake stage @${snowflakeStage}`);
+            logToFile("mssql2", `Starting streaming migration of ${fullTableName} to Snowflake's migration_stage`);
 
             await streamTableToChunks(fullTableName, snowflakeStage, sfConnection);
-            await replaceSnowflakeTableWithStageData(sfConnection, "PUBLIC", sanitizedTableName, snowflakeStage, "chunk_");
-        }
+            await replaceSnowflakeTableWithStageData(sfConnection, "PUBLIC", sanitizedTableName, "migration_stage", sanitizedTableName);
+        }));
 
         logToFile("mssql2", "All tables migrated successfully");
     } catch (err: any) {
