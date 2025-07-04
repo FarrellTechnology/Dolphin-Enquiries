@@ -17,9 +17,7 @@ let connection: ConnectionPool | null = null;
 let config: any = null;
 
 export async function connect(): Promise<ConnectionPool> {
-    if (connection && connection.connected) {
-        return connection;
-    }
+    if (connection && connection.connected) return connection;
 
     config = await settings.getMsSQLConfig();
     if (!config) throw new Error("MsSQL config is missing");
@@ -32,12 +30,7 @@ export async function connect(): Promise<ConnectionPool> {
 export async function getAllTables(): Promise<{ TABLE_SCHEMA: string; TABLE_NAME: string }[]> {
     const pool = await connect();
 
-    const query = `
-    SELECT TABLE_SCHEMA, TABLE_NAME 
-    FROM INFORMATION_SCHEMA.TABLES 
-    WHERE TABLE_TYPE = 'BASE TABLE'
-  `;
-
+    const query = `SELECT TABLE_SCHEMA, TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'`;
     const result = await pool.request().query(query);
     logToFile("mssql2", `Fetched ${result.recordset.length} tables from MSSQL`);
     return result.recordset;
@@ -54,7 +47,6 @@ class CsvChunker extends Transform {
         super({ objectMode: true });
         this.headers = headers;
         this.onChunkReady = onChunkReady;
-
         this.push(headers.join(",") + "\n");
     }
 
@@ -69,15 +61,12 @@ class CsvChunker extends Transform {
             }).join(",") + "\n";
 
             const lineBuffer = Buffer.from(line, "utf-8");
-
             if (this.chunkSize + lineBuffer.length > MAX_CHUNK_BYTES) {
                 const chunkPath = await this.flushChunk();
                 await this.onChunkReady(chunkPath);
             }
-
             this.chunkBuffers.push(lineBuffer);
             this.chunkSize += lineBuffer.length;
-
             callback();
         } catch (err) {
             callback(err);
@@ -103,13 +92,11 @@ class CsvChunker extends Transform {
         this.chunkSize = 0;
 
         const compressedData = zlib.gzipSync(chunkData);
-
         const chunkFileName = `chunk_${uuidv4()}.csv.gz`;
         const chunkFilePath = path.join("/tmp", chunkFileName);
         await fs.writeFile(chunkFilePath, compressedData);
 
         logToFile("mssql2", `Created chunk #${this.chunksCreated}: ${chunkFilePath}`);
-
         return chunkFilePath;
     }
 }
@@ -118,7 +105,7 @@ async function uploadChunkToSnowflakeStage(conn: Connection, stageName: string, 
     const fileName = path.basename(chunkPath);
     logToFile("mssql2", `Uploading ${fileName} to Snowflake stage ${stageName}`);
 
-    const putCmd = `PUT file://${chunkPath} @${stageName} AUTO_COMPRESS=TRUE`;
+    const putCmd = `PUT file://${chunkPath} ${stageName} AUTO_COMPRESS=TRUE`;
     try {
         await executeAsync(conn, putCmd);
         await fs.unlink(chunkPath);
@@ -131,53 +118,30 @@ async function uploadChunkToSnowflakeStage(conn: Connection, stageName: string, 
 
 function executeAsync(conn: Connection, sqlText: string): Promise<void> {
     return new Promise((resolve, reject) => {
-        conn.execute({
-            sqlText,
-            complete: (err) => (err ? reject(err) : resolve()),
-        });
+        conn.execute({ sqlText, complete: (err) => (err ? reject(err) : resolve()) });
     });
 }
 
-async function replaceSnowflakeTableWithStageData(
-    conn: Connection,
-    schema: string,
-    tableName: string,
-    stageName: string,
-    filePrefix: string
-) {
+async function replaceSnowflakeTableWithStageData(conn: Connection, schema: string, tableName: string, stageName: string, filePrefix: string) {
     const stagingTable = `${tableName}_STAGING`;
-    const targetTable = `${tableName}`;
     const stagePath = `@${stageName}/${filePrefix}`;
 
     try {
-        await executeAsync(conn, `CREATE OR REPLACE TEMPORARY TABLE ${stagingTable} LIKE ${targetTable}`);
-
-        await executeAsync(conn, `
-            COPY INTO ${stagingTable}
-            FROM ${stagePath}
-            FILE_FORMAT = (TYPE = 'CSV' FIELD_OPTIONALLY_ENCLOSED_BY = '"' SKIP_HEADER = 1 COMPRESSION = 'GZIP')
-            PURGE = TRUE
-            ON_ERROR = 'CONTINUE'
-        `);
-        await executeAsync(conn, `TRUNCATE TABLE ${targetTable}`);
-        await executeAsync(conn, `INSERT INTO ${targetTable} SELECT * FROM ${stagingTable}`);
+        await executeAsync(conn, `CREATE OR REPLACE TEMPORARY TABLE ${stagingTable} LIKE ${tableName}`);
+        await executeAsync(conn, `COPY INTO ${stagingTable} FROM ${stagePath} FILE_FORMAT = (TYPE = 'CSV' FIELD_OPTIONALLY_ENCLOSED_BY = '"' SKIP_HEADER = 1 COMPRESSION = 'GZIP') PURGE = TRUE ON_ERROR = 'CONTINUE'`);
+        await executeAsync(conn, `TRUNCATE TABLE ${tableName}`);
+        await executeAsync(conn, `INSERT INTO ${tableName} SELECT * FROM ${stagingTable}`);
         await executeAsync(conn, `DROP TABLE IF EXISTS ${stagingTable}`);
 
-        logToFile("mssql2", `Replaced table ${targetTable} with data loaded from stage ${stagePath}`);
-
+        logToFile("mssql2", `Replaced table ${tableName} with data loaded from stage ${stagePath}`);
     } catch (error) {
-        let errorMsg = "";
-        if (error instanceof Error) {
-            errorMsg = error.message;
-        } else {
-            errorMsg = String(error);
-        }
-        logToFile("mssql2", `ERROR replacing table ${targetTable}: ${errorMsg}`);
+        const msg = error instanceof Error ? error.message : String(error);
+        logToFile("mssql2", `ERROR replacing table ${tableName}: ${msg}`);
         throw error;
     }
 }
 
-async function streamTableToChunks(tableName: string, stageName: string, conn: Connection | null) {
+async function streamTableToChunks(tableName: string, stageName: string, conn: Connection) {
     const pool = await connect();
     const request = pool.request();
     request.stream = true;
@@ -187,27 +151,16 @@ async function streamTableToChunks(tableName: string, stageName: string, conn: C
 
     return new Promise<void>((resolve, reject) => {
         const csvChunker = new CsvChunker(headers, async (chunkPath) => {
-            if (!conn) throw new Error("Snowflake connection not initialized");
-            await uploadChunkToSnowflakeStage(conn, stageName, chunkPath);
+            await uploadChunkToSnowflakeStage(conn, `@${stageName}`, chunkPath);
         });
 
         request.query(`SELECT * FROM ${tableName}`);
 
-        request.on("row", row => {
-            csvChunker.write(row);
-        });
-
-        request.on("error", async err => {
-            logToFile("mssql2", `ERROR streaming table ${tableName}: ${err.message || err}`);
-            reject(err);
-        });
-
+        request.on("row", row => csvChunker.write(row));
+        request.on("error", err => reject(err));
         request.on("done", () => {
             csvChunker.end();
-            csvChunker.on("finish", () => {
-                logToFile("mssql2", `Finished streaming table ${tableName}`);
-                resolve();
-            });
+            csvChunker.on("finish", () => resolve());
         });
     });
 }
@@ -215,19 +168,18 @@ async function streamTableToChunks(tableName: string, stageName: string, conn: C
 export async function getAllDataIntoSnowflakeTwo() {
     try {
         const sfConnection = await initDbConnection(true);
+        await executeAsync(sfConnection, `CREATE STAGE IF NOT EXISTS migration_stage`);
 
         const tables = await getAllTables();
         logToFile("mssql2", `Starting migration of ${tables.length} tables`);
 
         for (const { TABLE_SCHEMA, TABLE_NAME } of tables) {
             const fullTableName = `[${TABLE_SCHEMA}].[${TABLE_NAME}]`;
-            const snowflakeStage = `%${TABLE_NAME}`;
+            const snowflakeStage = `migration_stage/${TABLE_NAME}`;
             const cleanTableName = TABLE_NAME;
 
-            logToFile("mssql2", `Starting streaming migration of ${fullTableName} to Snowflake stage ${snowflakeStage}`);
+            logToFile("mssql2", `Starting streaming migration of ${fullTableName} to Snowflake stage @${snowflakeStage}`);
             await streamTableToChunks(fullTableName, snowflakeStage, sfConnection);
-            logToFile("mssql2", `Finished streaming migration of ${fullTableName}`);
-
             await replaceSnowflakeTableWithStageData(sfConnection, "PUBLIC", cleanTableName, snowflakeStage, "chunk_");
         }
 
