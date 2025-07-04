@@ -306,6 +306,13 @@ export function normalize(value: string): string {
     .toUpperCase();
 }
 
+export async function processInBatches<T>(items: T[], batchSize: number, handler: (item: T) => Promise<void>) {
+    for (let i = 0; i < items.length; i += batchSize) {
+        const batch = items.slice(i, i + batchSize);
+        await Promise.allSettled(batch.map(handler));
+    }
+}
+
 export async function compressCsvChunks(chunkDir: string) {
   const files = await fs.readdir(chunkDir);
   for (const file of files) {
