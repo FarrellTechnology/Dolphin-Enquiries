@@ -101,12 +101,12 @@ class CsvChunker extends Transform {
     }
 }
 
-async function uploadChunkToSnowflakeStage(conn: Connection, stageName: string, chunkPath: string, subdir: string) {
+async function uploadChunkToSnowflakeStage(conn: Connection, stageName: string, chunkPath: string) {
     const fileName = path.basename(chunkPath);
 
-    logToFile("mssql2", `Uploading ${fileName} to Snowflake stage ${stageName}/${subdir}`);
+    logToFile("mssql2", `Uploading ${fileName} to Snowflake stage ${stageName}`);
 
-    const putCmd = `PUT file://${chunkPath} ${stageName}/${subdir}`;
+    const putCmd = `PUT file://${chunkPath} ${stageName}`;
 
     try {
         await executeAsync(conn, putCmd);
@@ -125,9 +125,9 @@ function executeAsync(conn: Connection, sqlText: string): Promise<void> {
     });
 }
 
-async function replaceSnowflakeTableWithStageData(conn: Connection, schema: string, tableName: string, stageName: string, filePrefix: string) {
+async function replaceSnowflakeTableWithStageData(conn: Connection, schema: string, tableName: string, stageName: string) {
     const stagingTable = `${tableName}_STAGING`;
-    const stagePath = `@${stageName}/${filePrefix}`;
+    const stagePath = `@${stageName}/${tableName}`;
 
     try {
         await executeAsync(conn, `TRUNCATE TABLE ${tableName}`);
@@ -157,7 +157,7 @@ async function streamTableToChunks(tableName: string, stageName: string, conn: C
 
     return new Promise<void>((resolve, reject) => {
         const csvChunker = new CsvChunker(headers, async (chunkPath) => {
-            await uploadChunkToSnowflakeStage(conn, "@migration_stage", chunkPath, tableName);
+            await uploadChunkToSnowflakeStage(conn, stageName, chunkPath);
         });
 
         request.query(`SELECT * FROM ${tableName}`);
@@ -191,8 +191,8 @@ export async function getAllDataIntoSnowflakeTwo() {
 
             logToFile("mssql2", `Starting streaming migration of ${fullTableName} to Snowflake's migration_stage`);
 
-            await streamTableToChunks(fullTableName, snowflakeStage, sfConnection);
-            await replaceSnowflakeTableWithStageData(sfConnection, "PUBLIC", sanitizedTableName, "migration_stage", sanitizedTableName);
+            await streamTableToChunks(sanitizedTableName, snowflakeStage, sfConnection);
+            await replaceSnowflakeTableWithStageData(sfConnection, "PUBLIC", sanitizedTableName, "migration_stage");
         }));
 
         logToFile("mssql2", "All tables migrated successfully");
