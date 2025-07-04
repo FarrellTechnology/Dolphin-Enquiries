@@ -103,9 +103,11 @@ class CsvChunker extends Transform {
 
 async function uploadChunkToSnowflakeStage(conn: Connection, stageName: string, chunkPath: string) {
     const fileName = path.basename(chunkPath);
+
     logToFile("mssql2", `Uploading ${fileName} to Snowflake stage ${stageName}`);
 
     const putCmd = `PUT file://${chunkPath} ${stageName}`;
+
     try {
         await executeAsync(conn, putCmd);
         await fs.unlink(chunkPath);
@@ -175,12 +177,13 @@ export async function getAllDataIntoSnowflakeTwo() {
 
         for (const { TABLE_SCHEMA, TABLE_NAME } of tables) {
             const fullTableName = `[${TABLE_SCHEMA}].[${TABLE_NAME}]`;
-            const snowflakeStage = `migration_stage/${TABLE_NAME}`;
-            const cleanTableName = TABLE_NAME;
+            const sanitizedTableName = TABLE_NAME.replace(/\s+/g, "_");
+            const snowflakeStage = `migration_stage/${sanitizedTableName}`;
 
             logToFile("mssql2", `Starting streaming migration of ${fullTableName} to Snowflake stage @${snowflakeStage}`);
+
             await streamTableToChunks(fullTableName, snowflakeStage, sfConnection);
-            await replaceSnowflakeTableWithStageData(sfConnection, "PUBLIC", cleanTableName, snowflakeStage, "chunk_");
+            await replaceSnowflakeTableWithStageData(sfConnection, "PUBLIC", sanitizedTableName, snowflakeStage, "chunk_");
         }
 
         logToFile("mssql2", "All tables migrated successfully");
