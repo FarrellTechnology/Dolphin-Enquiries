@@ -101,12 +101,12 @@ class CsvChunker extends Transform {
     }
 }
 
-async function uploadChunkToSnowflakeStage(conn: Connection, stageName: string, chunkPath: string) {
+async function uploadChunkToSnowflakeStage(conn: Connection, stageName: string, chunkPath: string, subdir: string) {
     const fileName = path.basename(chunkPath);
 
-    logToFile("mssql2", `Uploading ${fileName} to Snowflake stage ${stageName}`);
+    logToFile("mssql2", `Uploading ${fileName} to Snowflake stage ${stageName}/${subdir}`);
 
-    const putCmd = `PUT file://${chunkPath} ${stageName}`;
+    const putCmd = `PUT file://${chunkPath} ${stageName}/${subdir}`;
 
     try {
         await executeAsync(conn, putCmd);
@@ -157,7 +157,7 @@ async function streamTableToChunks(tableName: string, stageName: string, conn: C
 
     return new Promise<void>((resolve, reject) => {
         const csvChunker = new CsvChunker(headers, async (chunkPath) => {
-            await uploadChunkToSnowflakeStage(conn, "@migration_stage", chunkPath);
+            await uploadChunkToSnowflakeStage(conn, "@migration_stage", chunkPath, tableName);
         });
 
         request.query(`SELECT * FROM ${tableName}`);
