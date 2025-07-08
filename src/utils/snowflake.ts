@@ -22,6 +22,7 @@ export async function initDbConnection(isDolphinData: boolean = false) {
     account: config.account,
     username: config.username,
     password: config.password,
+    authenticator: 'PROGRAMMATIC_ACCESS_TOKEN',
     warehouse: config.warehouse,
     database: !isDolphinData ? config.database : 'DOLPHINDATA',
     schema: config.schema,
