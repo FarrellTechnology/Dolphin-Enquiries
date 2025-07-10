@@ -3,9 +3,8 @@ import path from 'path';
 import { documentsFolder, isRegularFile, logToFile, settings, TransferClient } from '../../utils';
 import { ping } from '..';
 
-let isTransferring = false;
-
-const failureStorePath = path.join(documentsFolder(), "DolphinEnquiries", "cache", "file-transfer-failures.json");
+let isTransferring: boolean = false;
+const failureStorePath: string = path.join(documentsFolder(), "DolphinEnquiries", "cache", "file-transfer-failures.json");
 
 function loadFailures(): { localFile: string; destRemoteFile: string; fileName: string }[] {
     try {
@@ -19,7 +18,7 @@ function loadFailures(): { localFile: string; destRemoteFile: string; fileName: 
     return [];
 }
 
-function saveFailures(failures: { localFile: string; destRemoteFile: string; fileName: string }[]) {
+function saveFailures(failures: { localFile: string; destRemoteFile: string; fileName: string }[]): void {
     try {
         const dir = path.dirname(failureStorePath);
         if (!fs.existsSync(dir)) {
@@ -31,7 +30,7 @@ function saveFailures(failures: { localFile: string; destRemoteFile: string; fil
     }
 }
 
-async function tryUploadWithRetry(client: TransferClient, localFile: string, destRemoteFile: string, fileName: string, maxRetries = 3) {
+async function tryUploadWithRetry(client: TransferClient, localFile: string, destRemoteFile: string, fileName: string, maxRetries = 3): Promise<boolean> {
     let attempts = 0;
     while (attempts < maxRetries) {
         try {
@@ -50,7 +49,7 @@ async function tryUploadWithRetry(client: TransferClient, localFile: string, des
     return false;
 }
 
-export async function watchAndTransferFiles() {
+export async function watchAndTransferFiles(): Promise<void> {
     const configOne = await settings.getSFTPConfigOne();
     const configTwo = await settings.getSFTPConfigTwo();
     const configThree = await settings.getSFTPConfigThree();

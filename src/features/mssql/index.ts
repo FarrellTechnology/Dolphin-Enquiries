@@ -4,7 +4,6 @@ import path from 'path';
 import { format } from '@fast-csv/format';
 import { parse } from 'csv-parse/sync';
 import { stringify } from 'csv-stringify/sync';
-import { globSync } from 'glob';
 import {
     compressCsvChunks,
     documentsFolder,
@@ -13,7 +12,6 @@ import {
     logToFile,
     mapMSSQLTypeToSnowflakeType,
     normalize,
-    runWithConcurrencyLimit,
     settings
 } from '../../utils';
 import { Connection } from 'snowflake-sdk';
@@ -104,9 +102,9 @@ async function getAllTables() {
     return result.recordset;
 }
 
-async function execSql(conn: Connection, sql: string): Promise<number> {
+async function execSql(conn: Connection | null, sql: string): Promise<number> {
     return new Promise((resolve, reject) => {
-        conn.execute({
+        conn?.execute({
             sqlText: sql,
             complete: (err, stmt, rows) => {
                 if (err) return reject(err);
@@ -130,16 +128,16 @@ async function execSql(conn: Connection, sql: string): Promise<number> {
     });
 }
 
-async function getColumnList(conn: Connection, tableName: string): Promise<string[]> {
+async function getColumnList(conn: Connection | null, tableName: string): Promise<string[]> {
     return new Promise((resolve, reject) => {
-        conn.execute({
+        conn?.execute({
             sqlText: `
-        SELECT COLUMN_NAME
-        FROM INFORMATION_SCHEMA.COLUMNS
-        WHERE TABLE_NAME = UPPER('${tableName}')
-        AND TABLE_SCHEMA = CURRENT_SCHEMA()
-        ORDER BY ORDINAL_POSITION
-      `,
+                SELECT COLUMN_NAME
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_NAME = UPPER('${tableName}')
+                AND TABLE_SCHEMA = CURRENT_SCHEMA()
+                ORDER BY ORDINAL_POSITION
+            `,
             complete: (err, _stmt, rows: any) => {
                 if (err) return reject(err);
                 const columns = rows.map((r: any) => `"${r.COLUMN_NAME}"`);
@@ -149,18 +147,18 @@ async function getColumnList(conn: Connection, tableName: string): Promise<strin
     });
 }
 
-async function doesTableExistInSnowflake(conn: Connection, tableName: string): Promise<boolean> {
+async function doesTableExistInSnowflake(conn: Connection | null, tableName: string): Promise<boolean> {
     const schema = 'PUBLIC';
     const name = tableName;
     const query = `
-    SELECT COUNT(*) AS count
-    FROM INFORMATION_SCHEMA.TABLES
-    WHERE TABLE_SCHEMA = UPPER('${schema}')
-    AND TABLE_NAME = UPPER('${name}')
-  `;
+        SELECT COUNT(*) AS count
+        FROM INFORMATION_SCHEMA.TABLES
+        WHERE TABLE_SCHEMA = UPPER('${schema}')
+        AND TABLE_NAME = UPPER('${name}')
+    `;
 
     return new Promise<boolean>((resolve, reject) => {
-        conn.execute({
+        conn?.execute({
             sqlText: query,
             complete: (err, _stmt, rows) => {
                 if (err) return reject(err);
@@ -176,11 +174,11 @@ async function generateCreateTableSQL(tableSchema: string, tableName: string): P
     const pool = await connect();
 
     const result = await pool.request().query(`
-    SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH
-    FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_SCHEMA = '${tableSchema}' AND TABLE_NAME = '${tableName}'
-    ORDER BY ORDINAL_POSITION
-  `);
+        SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_SCHEMA = '${tableSchema}' AND TABLE_NAME = '${tableName}'
+        ORDER BY ORDINAL_POSITION
+    `);
 
     const columns = result.recordset.map(col => {
         const snowflakeType = mapMSSQLTypeToSnowflakeType(col.DATA_TYPE);
@@ -260,7 +258,7 @@ async function fixCsvChunksColumns(chunkDir: string, expectedCols: number) {
     }
 }
 
-async function uploadAllChunksToStage(conn: Connection, chunkDir: string, stage: string) {
+async function uploadAllChunksToStage(conn: Connection | null, chunkDir: string, stage: string) {
     const files = (await fs.readdir(chunkDir))
         .filter(f => f.endsWith('.csv.gz'))
         .map(f => path.join(chunkDir, f));
@@ -270,7 +268,7 @@ async function uploadAllChunksToStage(conn: Connection, chunkDir: string, stage:
     }
 }
 
-async function loadCsvIntoTable(conn: Connection, tableName: string, csvFilePath: string) {
+async function loadCsvIntoTable(conn: Connection | null, tableName: string, csvFilePath: string) {
     const baseName = normalize(tableName);
     const tempTable = `${baseName}_STAGING`;
     const stage = `@~/${baseName}`;
@@ -326,7 +324,7 @@ async function loadCsvIntoTable(conn: Connection, tableName: string, csvFilePath
     return await execSql(conn, `SELECT COUNT(*) FROM ${baseName};`);
 }
 
-async function uploadChunkWithRetry(conn: Connection, file: string, stage: string, maxRetries = 3) {
+async function uploadChunkWithRetry(conn: Connection | null, file: string, stage: string, maxRetries = 3) {
     const command = `PUT file://${file} ${stage} AUTO_COMPRESS=FALSE`;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {

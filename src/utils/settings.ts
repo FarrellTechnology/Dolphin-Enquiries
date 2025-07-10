@@ -8,7 +8,7 @@ const ACCOUNT_NAME = 'encryption-key';
 class Settings {
   private store?: Store<StoreSchema>;
 
-  private async initStore() {
+  private async initStore(): Promise<void> {
     if (!this.store) {
       let key = await keytar.getPassword(SERVICE_NAME, ACCOUNT_NAME);
       if (!key) {

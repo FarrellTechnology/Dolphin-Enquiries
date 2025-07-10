@@ -3,7 +3,7 @@ import { assets, settings } from '../../utils';
 
 let settingsWindow: BrowserWindow | null = null;
 
-export async function createSettingsWindow() {
+export async function createSettingsWindow(): Promise<void> {
   if (settingsWindow) {
     settingsWindow.focus();
     return;
@@ -53,7 +53,7 @@ export async function createSettingsWindow() {
   });
 }
 
-export function setupSettingsHandlers(ipcMain: Electron.IpcMain) {
+export function setupSettingsHandlers(ipcMain: Electron.IpcMain): void {
   ipcMain.handle('get-smtp-config', async () => {
     return await settings.getSMTPConfig();
   });

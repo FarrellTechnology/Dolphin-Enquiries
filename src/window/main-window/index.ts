@@ -2,21 +2,21 @@ import { app, BrowserWindow, nativeImage, nativeTheme } from "electron";
 import { assets } from "../../utils";
 
 let mainWindow: BrowserWindow | null = null;
-let isQuitting = false;
+let isQuitting: boolean = false;
 
-export function getMainWindow() {
+export function getMainWindow(): BrowserWindow | null {
   return mainWindow;
 }
 
-export function getIsQuitting() {
+export function getIsQuitting(): boolean {
   return isQuitting;
 }
 
-export function setIsQuitting(value: boolean) {
+export function setIsQuitting(value: boolean): void {
   isQuitting = value;
 }
 
-export function createMainWindow() {
+export function createMainWindow(): void {
   mainWindow = new BrowserWindow({
     width: 550,
     height: 500,

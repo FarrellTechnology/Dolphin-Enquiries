@@ -1,5 +1,5 @@
 import SFTPClient from 'ssh2-sftp-client';
-import { Client as FTPClient } from 'basic-ftp';
+import { FileInfo, Client as FTPClient } from 'basic-ftp';
 import path from 'path';
 
 export class TransferClient {
@@ -11,7 +11,7 @@ export class TransferClient {
         this.isSFTP = config.port === 22 || config.port === 54872 || config.port === 42870;
     }
 
-    async connect() {
+    async connect(): Promise<void> {
         if (this.isSFTP) {
             this.sftpClient = new SFTPClient();
             await this.sftpClient.connect({
@@ -31,7 +31,7 @@ export class TransferClient {
         }
     }
 
-    async list(remotePath: string) {
+    async list(remotePath: string): Promise<SFTPClient.FileInfo[] | FileInfo[]> {
         if (this.isSFTP && this.sftpClient) {
             return await this.sftpClient.list(remotePath);
         } else if (this.ftpClient) {
@@ -41,7 +41,7 @@ export class TransferClient {
         return [];
     }
 
-    async get(remoteFile: string, localFile: string) {
+    async get(remoteFile: string, localFile: string): Promise<void> {
         if (this.isSFTP && this.sftpClient) {
             await this.sftpClient.get(remoteFile, localFile);
         } else if (this.ftpClient) {
@@ -49,7 +49,7 @@ export class TransferClient {
         }
     }
 
-    async put(localFile: string, remoteFile: string) {
+    async put(localFile: string, remoteFile: string): Promise<void> {
         if (this.isSFTP && this.sftpClient) {
             await this.sftpClient.put(localFile, remoteFile);
         } else if (this.ftpClient) {
@@ -57,7 +57,7 @@ export class TransferClient {
         }
     }
 
-    async delete(remoteFile: string) {
+    async delete(remoteFile: string): Promise<void> {
         if (this.isSFTP && this.sftpClient) {
             await this.sftpClient.delete(remoteFile);
         } else if (this.ftpClient) {
@@ -65,7 +65,7 @@ export class TransferClient {
         }
     }
 
-    async end() {
+    async end(): Promise<void> {
         if (this.sftpClient) await this.sftpClient.end();
         if (this.ftpClient) this.ftpClient.close();
     }

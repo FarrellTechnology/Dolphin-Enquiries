@@ -1,16 +1,16 @@
 import { app, BrowserWindow } from "electron";
 import { logToFile } from ".";
 
-let relaunchAttempts = 0;
-const MAX_ATTEMPTS = 3;
-const RELAUNCH_DELAY_MS = 3000;
+let relaunchAttempts: number = 0;
+const MAX_ATTEMPTS: number = 3;
+const RELAUNCH_DELAY_MS: number = 3000;
 
-function logRelaunchEvent(message: string) {
+function logRelaunchEvent(message: string): void {
     console.warn(`[safeRelaunch] ${message}`);
     logToFile("safe-relaunch", message);
 }
 
-function relaunchApp(reason: string) {
+function relaunchApp(reason: string): void {
     relaunchAttempts++;
     const message = `Attempt ${relaunchAttempts}: ${reason}`;
     logRelaunchEvent(message);
@@ -29,7 +29,9 @@ function relaunchApp(reason: string) {
     }, RELAUNCH_DELAY_MS);
 }
 
-export function setupSafeRelaunch(mainWindow: BrowserWindow) {
+export function setupSafeRelaunch(mainWindow: BrowserWindow | null): void {
+    if (!mainWindow) return;
+
     // Renderer crash
     mainWindow.webContents.on("render-process-gone", (_event, details) => {
         relaunchApp(`Renderer process gone: ${details.reason}`);

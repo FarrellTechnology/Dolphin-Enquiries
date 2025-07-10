@@ -1,6 +1,7 @@
 import { app, Menu, ipcMain } from "electron";
-import { enableAutoLaunch, setupAutoUpdater, setupScheduler, checkDolphinFiles, watchAndTransferFiles, getAllDataIntoSnowflake } from "./features";
-import { createMainWindow, setIsQuitting, setupSettingsHandlers, setupTray } from "./window";
+import { enableAutoLaunch, setupAutoUpdater, setupScheduler, checkDolphinFiles, watchAndTransferFiles } from "./features";
+import { createMainWindow, getMainWindow, setIsQuitting, setupSettingsHandlers, setupTray } from "./window";
+import { setupSafeRelaunch } from "./utils";
 
 app.whenReady().then(async () => {
   await enableAutoLaunch();
@@ -9,6 +10,11 @@ app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
 
   createMainWindow();
+
+  if (app.isPackaged) {
+    setupSafeRelaunch(getMainWindow());
+  }
+
   setupTray(() => {
     setIsQuitting(true);
     app.quit();
