@@ -211,7 +211,7 @@ async function streamTableToChunks(tableName: string, stageName: string, conn: C
 export async function getAllDataIntoSnowflakeTwo() {
     try {
         const sfConnection = await initDbConnection(true);
-        await executeAsync(sfConnection, `CREATE STAGE IF NOT EXISTS migration_stage`);
+        await executeAsync(sfConnection, `CREATE STAGE IF NOT EXISTS DOLPHINDATA.PUBLIC.migration_stage`);
 
         const tables = await getAllTables();
         logToFile("mssql2", `Starting migration of ${tables.length} tables`);
@@ -219,7 +219,7 @@ export async function getAllDataIntoSnowflakeTwo() {
         await processInBatches(tables, 10, async table => {
             const fullTableName = `[${table.TABLE_SCHEMA}].[${table.TABLE_NAME.replace(/]/g, ']]')}]`;
             const sanitizedTableName = table.TABLE_NAME.replace(/\s+/g, "_");
-            const snowflakeStage = `migration_stage/${sanitizedTableName}`;
+            const snowflakeStage = `DOLPHINDATA.PUBLIC.migration_stage/${sanitizedTableName}`;
 
             logToFile("mssql2", `Starting migration of ${fullTableName}`);
 
