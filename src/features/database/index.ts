@@ -142,7 +142,7 @@ export async function saveParsedTravelFolder(xmlString: string, fileName: string
     let isNewEnquiry = false;
 
     const existing = await query(conn, `SELECT ID FROM ENQUIRIES WHERE SOURCE_BOOKING_ID = ? LIMIT 1`, [enquiry.source_booking_id]);
-    if (existing.length > 0) {
+    if (existing && existing.length > 0) {
       enquiryId = existing[0].ID;
       console.debug(`Enquiry with SOURCE_BOOKING_ID ${enquiry.source_booking_id} already exists, continuing to ensure all child data is inserted.`);
     } else {

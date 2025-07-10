@@ -9,6 +9,7 @@ export * from "./settings";
 export * from "./transfer-files";
 export * from "./snowflake";
 export * from "./logger";
+export * from "./safeRelaunch";
 
 const gzip = promisify(zlib.gzip);
 
@@ -22,7 +23,7 @@ export function documentsFolder(): string {
   return app.getPath("documents");
 }
 
-export const assets = {
+export const assets: { template: (...segments: string[]) => string, image: (...segments: string[]) => string, js: (...segments: string[]) => string } = {
   template: (...segments: string[]) => resolveAppPath("templates", ...segments),
   image: (...segments: string[]) => resolveAppPath("images", ...segments),
   js: (...segments: string[]) => resolveAppPath("js", ...segments),
@@ -162,7 +163,7 @@ export async function runWithConcurrencyLimit<T>(
   items: T[],
   limit: number,
   asyncFn: (item: T) => Promise<any>
-) {
+): Promise<any[]> {
   const results: any[] = [];
   let i = 0;
 
@@ -306,14 +307,14 @@ export function normalize(value: string): string {
     .toUpperCase();
 }
 
-export async function processInBatches<T>(items: T[], batchSize: number, handler: (item: T) => Promise<void>) {
-    for (let i = 0; i < items.length; i += batchSize) {
-        const batch = items.slice(i, i + batchSize);
-        await Promise.allSettled(batch.map(handler));
-    }
+export async function processInBatches<T>(items: T[], batchSize: number, handler: (item: T) => Promise<void>): Promise<void> {
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
+    await Promise.allSettled(batch.map(handler));
+  }
 }
 
-export async function compressCsvChunks(chunkDir: string) {
+export async function compressCsvChunks(chunkDir: string): Promise<void> {
   const files = await fs.readdir(chunkDir);
   for (const file of files) {
     if (file.endsWith('.csv')) {

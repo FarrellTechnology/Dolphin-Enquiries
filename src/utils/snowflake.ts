@@ -1,11 +1,11 @@
-import snowflake from 'snowflake-sdk';
+import snowflake, { FileAndStageBindStatement, RowStatement } from 'snowflake-sdk';
 import { settings } from './';
 
 export let connection: snowflake.Connection | null = null;
 let dolphinConnection: boolean = false;
 let config: any = null;
 
-export async function initDbConnection(isDolphinData: boolean = false) {
+export async function initDbConnection(isDolphinData: boolean = false): Promise<snowflake.Connection | null> {
   if (connection && dolphinConnection == isDolphinData) return connection;
 
   config = await settings.getSnowflakeConfig();
@@ -39,7 +39,9 @@ export async function initDbConnection(isDolphinData: boolean = false) {
   return connection;
 }
 
-export async function query(conn: snowflake.Connection, sql: string, binds: any[] = [], retry = true): Promise<any[]> {
+export async function query(conn: snowflake.Connection | null, sql: string, binds: any[] = [], retry = true): Promise<any[]> {
+  if (!conn) return [];
+
   return new Promise((resolve, reject) => {
     conn.execute({
       sqlText: sql,

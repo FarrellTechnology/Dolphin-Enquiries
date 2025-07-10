@@ -101,7 +101,7 @@ class CsvChunker extends Transform {
     }
 }
 
-async function uploadChunkToSnowflakeStage(conn: Connection, stageName: string, chunkPath: string) {
+async function uploadChunkToSnowflakeStage(conn: Connection | null, stageName: string, chunkPath: string) {
     const fileName = path.basename(chunkPath);
 
     logToFile("mssql2", `Uploading ${fileName} to Snowflake stage ${stageName}`);
@@ -119,13 +119,13 @@ async function uploadChunkToSnowflakeStage(conn: Connection, stageName: string, 
     }
 }
 
-function executeAsync(conn: Connection, sqlText: string): Promise<void> {
+function executeAsync(conn: Connection | null, sqlText: string): Promise<void> {
     return new Promise((resolve, reject) => {
-        conn.execute({ sqlText, complete: (err) => (err ? reject(err) : resolve()) });
+        conn?.execute({ sqlText, complete: (err) => (err ? reject(err) : resolve()) });
     });
 }
 
-async function replaceSnowflakeTableWithStageData(conn: Connection, schema: string, tableName: string, stageName: string) {
+async function replaceSnowflakeTableWithStageData(conn: Connection | null, schema: string, tableName: string, stageName: string) {
     const stagingTable = `${tableName}_STAGING`;
     const stagePath = `@${stageName}/${tableName}`;
 
@@ -146,7 +146,7 @@ async function replaceSnowflakeTableWithStageData(conn: Connection, schema: stri
 }
 
 export async function ensureSnowflakeTableExists(
-    conn: Connection,
+    conn: Connection | null,
     schema: string,
     tableName: string,
     mssqlColumns: { COLUMN_NAME: string; DATA_TYPE: string }[]
@@ -162,7 +162,7 @@ export async function ensureSnowflakeTableExists(
     const createSql = `CREATE TABLE IF NOT EXISTS ${tableIdentifier} (${columnsDefinition})`;
 
     return new Promise((resolve, reject) => {
-        conn.execute({
+        conn?.execute({
             sqlText: createSql,
             complete: (err) => {
                 if (err) {
@@ -177,7 +177,7 @@ export async function ensureSnowflakeTableExists(
     });
 }
 
-async function streamTableToChunks(tableName: string, stageName: string, conn: Connection) {
+async function streamTableToChunks(tableName: string, stageName: string, conn: Connection | null) {
     const pool = await connect();
     const request = pool.request();
     request.stream = true;

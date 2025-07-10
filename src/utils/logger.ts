@@ -10,7 +10,7 @@ export function logToFile(
     extension?: string;
     filePrefix?: string;
   }
-) {
+): void {
   const {
     dateBasedName = true,
     extension = ".txt",

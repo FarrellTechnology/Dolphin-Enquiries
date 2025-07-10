@@ -6,7 +6,7 @@ import { createSettingsWindow } from "../settings";
 
 let tray: Tray;
 
-export function setupTray(onQuit: () => void) {
+export function setupTray(onQuit: () => void): void {
   const iconPath = assets.image(nativeTheme.shouldUseDarkColors ? "company-icon.png" : "company-icon-dark.png");
   tray = new Tray(nativeImage.createFromPath(iconPath));
 
@@ -34,6 +34,6 @@ export function setupTray(onQuit: () => void) {
   });
 }
 
-export function updateTrayTooltip(message: string) {
+export function updateTrayTooltip(message: string): void {
   if (tray) tray.setToolTip(message);
 }
