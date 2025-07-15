@@ -2,6 +2,15 @@ import fs from "fs";
 import path from "path";
 import { documentsFolder } from ".";
 
+/**
+ * Logs a message to a specified log file.
+ * @param {string} subfolder - The subfolder in which the log will be stored.
+ * @param {string} logLine - The log message.
+ * @param {Object} options - Additional options for customizing log file behavior.
+ * @param {boolean} [options.dateBasedName=true] - If true, the file name will be based on the date.
+ * @param {string} [options.extension='.txt'] - The file extension for the log file.
+ * @param {string} [options.filePrefix=''] - Prefix to add to the log file name.
+ */
 export function logToFile(
   subfolder: string,
   logLine: string,

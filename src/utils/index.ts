@@ -13,22 +13,46 @@ export * from "./safeRelaunch";
 
 const gzip = promisify(zlib.gzip);
 
+/**
+ * Resolves the path to the app's assets, taking into account whether the app is packaged or in development.
+ * 
+ * @param {...string} segments - Path segments to join with the base path.
+ * @returns {string} - The resolved absolute path.
+ */
 function resolveAppPath(...segments: string[]): string {
   return app.isPackaged
     ? path.join(process.resourcesPath, "assets", ...segments)
     : path.join(__dirname, "..", "..", "src", "assets", ...segments);
 }
 
+/**
+ * Returns the path to the documents folder.
+ * 
+ * @returns {string} - The path to the documents folder.
+ */
 export function documentsFolder(): string {
   return app.getPath("documents");
 }
 
-export const assets: { template: (...segments: string[]) => string, image: (...segments: string[]) => string, js: (...segments: string[]) => string } = {
+/**
+ * An object holding functions to resolve paths to different asset types (template, image, js).
+ */
+export const assets: { 
+  template: (...segments: string[]) => string, 
+  image: (...segments: string[]) => string, 
+  js: (...segments: string[]) => string 
+} = {
   template: (...segments: string[]) => resolveAppPath("templates", ...segments),
   image: (...segments: string[]) => resolveAppPath("images", ...segments),
   js: (...segments: string[]) => resolveAppPath("js", ...segments),
 };
 
+/**
+ * Determines the report mode based on the date counts (daily, weekly, or monthly).
+ * 
+ * @param {Array<{date: string}>} perDateCounts - Array of objects containing date and counts.
+ * @returns {"monthly" | "weekly" | "daily"} - The determined report mode.
+ */
 export function determineReportMode(perDateCounts: Array<{ date: string }>): "monthly" | "weekly" | "daily" {
   const dateStrings = perDateCounts.map(r => r.date);
 
@@ -45,6 +69,15 @@ export function determineReportMode(perDateCounts: Array<{ date: string }>): "mo
   return 'monthly';
 }
 
+/**
+ * Loads an email template and replaces placeholders with actual data.
+ * 
+ * @param {Array<{date: string; leisureCount: number; golfCount: number}>} perDateCounts - Array of date-based counts for leisure and golf.
+ * @param {number} totalLeisure - Total leisure count.
+ * @param {number} totalGolf - Total golf count.
+ * @param {"monthly" | "weekly" | "daily"} [mode='daily'] - The report mode.
+ * @returns {Promise<string>} - The HTML email template with replaced placeholders.
+ */
 export async function loadEmailTemplate(
   perDateCounts: Array<{ date: string; leisureCount: number; golfCount: number }>,
   totalLeisure: number,
@@ -139,6 +172,12 @@ export async function loadEmailTemplate(
     .replace("{{showTable}}", tableAndTotals);
 }
 
+/**
+ * Checks if the file is a regular file.
+ * 
+ * @param {UnifiedFileInfo} file - The file information.
+ * @returns {boolean} - True if the file is a regular file, false otherwise.
+ */
 export function isRegularFile(file: UnifiedFileInfo): boolean {
   if (typeof file.type === 'string') {
     return file.type === '-';
@@ -152,6 +191,12 @@ export function isRegularFile(file: UnifiedFileInfo): boolean {
   return false;
 }
 
+/**
+ * Extracts the source type (e.g., EGR or LWC) from the file name.
+ * 
+ * @param {string} fileName - The name of the file.
+ * @returns {string | null} - The source type (e.g., 'EGR', 'LWC') or null if not found.
+ */
 export function getSourceTypeFromFileName(fileName: string): string | null {
   if (!fileName) return null;
 
@@ -159,6 +204,15 @@ export function getSourceTypeFromFileName(fileName: string): string | null {
   return match ? match[0].toUpperCase() : null;
 }
 
+/**
+ * Runs a function on a set of items with a concurrency limit.
+ * 
+ * @template T
+ * @param {T[]} items - The items to process.
+ * @param {number} limit - The maximum number of concurrent operations.
+ * @param {(item: T) => Promise<any>} asyncFn - The async function to run on each item.
+ * @returns {Promise<any[]>} - The results of processing all items.
+ */
 export async function runWithConcurrencyLimit<T>(
   items: T[],
   limit: number,
@@ -184,6 +238,12 @@ export async function runWithConcurrencyLimit<T>(
   return results;
 }
 
+/**
+ * Maps an MSSQL data type to a corresponding Snowflake data type.
+ * 
+ * @param {string} type - The MSSQL data type.
+ * @returns {string} - The corresponding Snowflake data type.
+ */
 export function mapMSSQLTypeToSnowflakeType(type: string): string {
   const typeMap: Record<string, string> = {
     int: 'INTEGER',
@@ -221,10 +281,15 @@ export function mapMSSQLTypeToSnowflakeType(type: string): string {
   return typeMap[type.toLowerCase()] || 'VARCHAR';
 }
 
+/**
+ * Fixes the timestamp format in an object by converting invalid or undefined timestamps.
+ * 
+ * @param {Record<string, any>} obj - The object containing timestamp values.
+ * @returns {Record<string, any>} - The object with normalized timestamp values.
+ */
 export function fixTimestampFormat(obj: Record<string, any>): Record<string, any> {
   const result: Record<string, any> = {};
   const INVALID_PLACEHOLDER = '1970-01-01 00:00:00.000';
-
 
   for (const key in obj) {
     const val = obj[key];
@@ -273,6 +338,12 @@ export function fixTimestampFormat(obj: Record<string, any>): Record<string, any
   return result;
 }
 
+/**
+ * Gets the date strings for the week (last Saturday, Sunday, and the 5 weekdays).
+ * 
+ * @param {Date} today - The reference date (usually today).
+ * @returns {string[]} - The array of date strings in YYYYMMDD format.
+ */
 export function getWeekDateStrings(today: Date): string[] {
   const result: string[] = [];
 
@@ -299,6 +370,12 @@ export function getWeekDateStrings(today: Date): string[] {
   return result;
 }
 
+/**
+ * Normalizes a string by trimming, removing non-alphanumeric characters, and converting to uppercase.
+ * 
+ * @param {string} value - The string to normalize.
+ * @returns {string} - The normalized string.
+ */
 export function normalize(value: string): string {
   return value
     .trim()
@@ -307,6 +384,15 @@ export function normalize(value: string): string {
     .toUpperCase();
 }
 
+/**
+ * Processes an array of items in batches with concurrency limit.
+ * 
+ * @template T
+ * @param {T[]} items - The items to process.
+ * @param {number} batchSize - The number of items in each batch.
+ * @param {(item: T) => Promise<void>} handler - The handler function to process each item.
+ * @returns {Promise<void>} - Resolves when all items have been processed.
+ */
 export async function processInBatches<T>(items: T[], batchSize: number, handler: (item: T) => Promise<void>): Promise<void> {
   for (let i = 0; i < items.length; i += batchSize) {
     const batch = items.slice(i, i + batchSize);
@@ -314,6 +400,12 @@ export async function processInBatches<T>(items: T[], batchSize: number, handler
   }
 }
 
+/**
+ * Compresses CSV files in the specified directory using gzip compression.
+ * 
+ * @param {string} chunkDir - The directory containing the CSV files to compress.
+ * @returns {Promise<void>} - Resolves when the files are compressed.
+ */
 export async function compressCsvChunks(chunkDir: string): Promise<void> {
   const files = await fs.readdir(chunkDir);
   for (const file of files) {
@@ -326,3 +418,11 @@ export async function compressCsvChunks(chunkDir: string): Promise<void> {
     }
   }
 }
+
+/**
+ * A delay function that returns a promise resolving after a specified time.
+ * 
+ * @param {number} ms - The delay in milliseconds.
+ * @returns {Promise<void>} - A promise that resolves after the specified delay.
+ */
+export const delay = (ms: number): Promise<void> => new Promise(res => setTimeout(res, ms));
