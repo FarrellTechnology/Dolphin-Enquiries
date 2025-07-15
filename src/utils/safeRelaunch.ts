@@ -1,73 +1,125 @@
 import { app, BrowserWindow } from "electron";
 import { logToFile } from ".";
 
-let relaunchAttempts: number = 0;
-const MAX_ATTEMPTS: number = 3;
-const RELAUNCH_DELAY_MS: number = 3000;
+const MAX_ATTEMPTS = 3;
+const RELAUNCH_DELAY_MS = 3000;
+let relaunchAttempts = 0;
+let skippedDueToKnownError = false;
 
-function logRelaunchEvent(message: string): void {
-    console.warn(`[safeRelaunch] ${message}`);
-    logToFile("safe-relaunch", message);
+/**
+ * Logs an event message with a specific level, and optionally includes extra information.
+ * 
+ * @param {("info" | "warn" | "error")} level - The log level (info, warn, error).
+ * @param {string} message - The message to log.
+ * @param {any} [extraInfo={}] - Additional information to log (optional).
+ */
+function logEvent(level: "info" | "warn" | "error", message: string, extraInfo: any = {}): void {
+    let logMessage = `${level.toUpperCase()} - ${message}`;
+
+    if (Object.keys(extraInfo).length) {
+        logMessage += ` | Additional Info: ${JSON.stringify(extraInfo)}`;
+    }
+
+    // Log to console depending on level
+    if (level === "warn") {
+        console.warn(logMessage);
+    } else if (level === "error") {
+        console.error(logMessage);
+    } else {
+        console.log(logMessage);
+    }
+
+    // Log to file
+    logToFile("safe-relaunch", logMessage);
 }
 
+/**
+ * Determines whether the given error reason is a known recoverable error.
+ * 
+ * @param {string} reason - The reason for the error.
+ * @returns {boolean} - Returns true if the error is recoverable, otherwise false.
+ */
+function isKnownRecoverableError(reason: string): boolean {
+    return reason.includes("net::ERR_NAME_NOT_RESOLVED") || reason.includes("getConnection");
+}
+
+/**
+ * Attempts to relaunch the application if it encounters a failure or crash.
+ * 
+ * @param {string} reason - The reason for triggering the relaunch.
+ */
 function relaunchApp(reason: string): void {
+    logEvent("info", `Attempting to relaunch due to: ${reason}`, { attempt: relaunchAttempts + 1 });
+
+    if (isKnownRecoverableError(reason)) {
+        if (!skippedDueToKnownError) {
+            const msg = `Skipped relaunch due to known recoverable error: ${reason}`;
+            logEvent("warn", msg, { reason });
+            skippedDueToKnownError = true;
+        }
+        return;
+    }
+
     relaunchAttempts++;
-    const message = `Attempt ${relaunchAttempts}: ${reason}`;
-    logRelaunchEvent(message);
+    logEvent("warn", `Relaunch attempt ${relaunchAttempts} triggered by: ${reason}`);
 
     if (relaunchAttempts > MAX_ATTEMPTS) {
-        const failMsg = "Max relaunch attempts exceeded. App will exit.";
-        console.error(`[safeRelaunch] ${failMsg}`);
-        logToFile("safe-relaunch", failMsg);
+        logEvent("error", "Max relaunch attempts exceeded. App will NOT restart.", { reason });
         return;
     }
 
     setTimeout(() => {
-        logToFile("safe-relaunch", "Calling app.relaunch() and app.exit(0)");
+        logEvent("info", "Calling app.relaunch() and app.exit(0)", { delay: RELAUNCH_DELAY_MS });
         app.relaunch();
         app.exit(0);
     }, RELAUNCH_DELAY_MS);
 }
 
+/**
+ * Sets up monitoring for the main window to detect and respond to process failures.
+ * 
+ * @param {BrowserWindow | null} mainWindow - The main BrowserWindow instance.
+ */
 export function setupSafeRelaunch(mainWindow: BrowserWindow | null): void {
     if (!mainWindow) return;
 
-    // Renderer crash
+    logEvent("info", "Setting up safe relaunch monitoring...");
+
     mainWindow.webContents.on("render-process-gone", (_event, details) => {
-        relaunchApp(`Renderer process gone: ${details.reason}`);
+        const reason = `Renderer process gone: ${details.reason}`;
+        logEvent("warn", `Renderer process gone. Reason: ${details.reason}`, { details });
+        relaunchApp(reason);
     });
 
-    // Renderer unresponsive
     mainWindow.on("unresponsive", () => {
-        relaunchApp("Window became unresponsive");
+        logEvent("warn", "Renderer window became unresponsive", { windowId: mainWindow.id });
+        relaunchApp("Renderer window became unresponsive");
     });
 
-    // WebContents crash
     mainWindow.webContents.on("crashed", () => {
+        logEvent("error", "WebContents crashed", { windowId: mainWindow.id });
         relaunchApp("WebContents crashed");
     });
 
-    // GPU crash
     app.on("child-process-gone", (_event, details) => {
-        const { type, reason, exitCode } = details;
-        if (type === "GPU") {
-            relaunchApp(`GPU process gone. Reason: ${reason}, Exit Code: ${exitCode}`);
+        if (details.type === "GPU") {
+            const reason = `GPU process crash. Reason: ${details.reason}, Exit Code: ${details.exitCode}`;
+            logEvent("error", `GPU process crash detected`, { details });
+            relaunchApp(reason);
         }
     });
 
-    // Main process exceptions
     process.on("uncaughtException", (err) => {
         const msg = `Uncaught Exception: ${err.stack || err.message || err}`;
-        console.error("[safeRelaunch]", err);
-        logToFile("safe-relaunch", msg);
+        logEvent("error", msg, { error: err });
         relaunchApp("Uncaught exception in main process");
+        process.exit(1);
     });
 
-    // Promise rejections
     process.on("unhandledRejection", (reason: any) => {
-        const msg = `Unhandled Rejection: ${reason?.stack || reason}`;
-        console.error("[safeRelaunch]", reason);
-        logToFile("safe-relaunch", msg);
+        const msg = `Unhandled Promise Rejection: ${reason?.stack || reason}`;
+        logEvent("error", msg, { reason });
         relaunchApp("Unhandled promise rejection in main process");
+        process.exit(1);
     });
 }

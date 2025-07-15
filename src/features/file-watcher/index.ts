@@ -6,18 +6,27 @@ import { ping } from '..';
 let isTransferring: boolean = false;
 const failureStorePath: string = path.join(documentsFolder(), "DolphinEnquiries", "cache", "file-transfer-failures.json");
 
+/**
+ * Loads the failed transfer cache from disk.
+ * @returns {Array<{ localFile: string; destRemoteFile: string; fileName: string }>} List of failed file transfers.
+ */
 function loadFailures(): { localFile: string; destRemoteFile: string; fileName: string }[] {
     try {
         if (fs.existsSync(failureStorePath)) {
             const content = fs.readFileSync(failureStorePath, 'utf-8');
-            return JSON.parse(content);
+            const parsed = JSON.parse(content);
+            return Array.isArray(parsed) ? parsed : [];
         }
     } catch (err) {
-        console.error('Failed to load failure cache', err);
+        logToFile("file-movements", `Failed to load failure cache: ${err instanceof Error ? err.message : String(err)}`);
     }
     return [];
 }
 
+/**
+ * Saves the failed transfer cache to disk.
+ * @param {Array<{ localFile: string; destRemoteFile: string; fileName: string }>} failures - List of failed file transfers to save.
+ */
 function saveFailures(failures: { localFile: string; destRemoteFile: string; fileName: string }[]): void {
     try {
         const dir = path.dirname(failureStorePath);
@@ -26,21 +35,57 @@ function saveFailures(failures: { localFile: string; destRemoteFile: string; fil
         }
         fs.writeFileSync(failureStorePath, JSON.stringify(failures, null, 2));
     } catch (err) {
-        console.error('Failed to save failure cache', err);
+        logToFile("file-movements", `Failed to save failure cache: ${err instanceof Error ? err.message : String(err)}`);
     }
 }
 
-async function tryUploadWithRetry(client: TransferClient, localFile: string, destRemoteFile: string, fileName: string, maxRetries = 3): Promise<boolean> {
+/**
+ * Resolves file paths based on base path, upload base, and file name.
+ * @param {string} basePath - The base remote path.
+ * @param {string} uploadBase - The upload base path.
+ * @param {string} fileName - The name of the file.
+ * @returns {Object} - Contains resolved file paths (remoteFile, localFile, destFolder, destRemoteFile).
+ */
+function resolveFilePaths(basePath: string, uploadBase: string, fileName: string) {
+    const remoteFile = `${basePath}${fileName}`;
+    const todayFolderName = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const localPath = path.join(documentsFolder(), "DolphinEnquiries", "completed", todayFolderName);
+    const localFile = path.join(localPath, fileName);
+    let destFolder = uploadBase;
+
+    if (fileName.toLowerCase().startsWith('egr')) {
+        destFolder = path.posix.join(destFolder, 'XML-EGR/');
+    } else if (fileName.toLowerCase().startsWith('lwc')) {
+        destFolder = path.posix.join(destFolder, 'XML-LWC/');
+    }
+
+    if (!destFolder.endsWith('/')) destFolder += '/';
+
+    const destRemoteFile = destFolder + fileName;
+    return { remoteFile, localFile, destFolder, destRemoteFile };
+}
+
+/**
+ * Tries to upload a file with retry logic.
+ * @param {TransferClient} client - The transfer client to use for uploading.
+ * @param {string} localFile - The local file path.
+ * @param {string} destRemoteFile - The destination remote file path.
+ * @param {string} fileName - The name of the file.
+ * @param {number} [maxRetries=3] - The maximum number of retry attempts.
+ * @returns {Promise<boolean>} - Returns true if the upload succeeds, false otherwise.
+ */
+async function tryUploadWithRetry(client: TransferClient, localFile: string, destRemoteFile: string, fileName: string, maxRetries: number = 3): Promise<boolean> {
     let attempts = 0;
     while (attempts < maxRetries) {
         try {
             await client.put(localFile, destRemoteFile);
-            console.debug(`Uploaded ${fileName} to client3 at ${destRemoteFile} (attempt ${attempts + 1})`);
+            logToFile("file-movements", `Successfully uploaded ${fileName} to client3 at ${destRemoteFile} (attempt ${attempts + 1})`);
             return true;
         } catch (err) {
             attempts++;
-            console.warn(`Upload attempt ${attempts} failed for ${fileName}:`, err);
+            logToFile("file-movements", `Upload attempt ${attempts} failed for ${fileName}: ${err instanceof Error ? err.message : String(err)}`);
             if (attempts >= maxRetries) {
+                logToFile("file-movements", `All upload attempts failed for ${fileName}`);
                 return false;
             }
             await new Promise(res => setTimeout(res, 1000));
@@ -49,13 +94,17 @@ async function tryUploadWithRetry(client: TransferClient, localFile: string, des
     return false;
 }
 
+/**
+ * Main function to watch and transfer files.
+ * @returns {Promise<void>} - Resolves when the file transfer process is complete.
+ */
 export async function watchAndTransferFiles(): Promise<void> {
     const configOne = await settings.getSFTPConfigOne();
     const configTwo = await settings.getSFTPConfigTwo();
     const configThree = await settings.getSFTPConfigThree();
 
     if (!configOne || !configTwo || !configThree) {
-        console.error("SFTP configurations are not set up correctly.");
+        logToFile("file-movements", "SFTP configurations are not set up correctly.");
         return;
     }
 
@@ -73,7 +122,6 @@ export async function watchAndTransferFiles(): Promise<void> {
 
     const todayFolderName = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const localPath = path.join(documentsFolder(), "DolphinEnquiries", "completed", todayFolderName);
-
     if (!fs.existsSync(localPath)) {
         fs.mkdirSync(localPath, { recursive: true });
     }
@@ -82,6 +130,8 @@ export async function watchAndTransferFiles(): Promise<void> {
 
     if (isTransferring) return;
     isTransferring = true;
+
+    logToFile("file-movements", `=== Begin transfer session at ${new Date().toISOString()} ===`);
 
     let currentFile: string | null = null;
     let failureCache = loadFailures();
@@ -100,54 +150,38 @@ export async function watchAndTransferFiles(): Promise<void> {
                     ping('EFR-Electron-Mover', { state: 'run' });
                     ping('EFR-Electron-Uploading', { message: fileName });
 
-                    const remoteFile = `${sourceRemotePath}${fileName}`;
-                    const localFile = path.join(localPath, fileName);
-                    let destFolder = uploadPath3;
-
-                    if (fileName.toLowerCase().startsWith('egr')) {
-                        destFolder = path.posix.join(destFolder, 'XML-EGR/');
-                    } else if (fileName.toLowerCase().startsWith('lwc')) {
-                        destFolder = path.posix.join(destFolder, 'XML-LWC/');
-                    }
-
-                    if (!destFolder.endsWith('/')) destFolder += '/';
-
-                    const destRemoteFile = destFolder + fileName;
+                    const { remoteFile, localFile, destFolder, destRemoteFile } = resolveFilePaths(sourceRemotePath, uploadPath3, fileName);
                     const startTime = Date.now();
 
                     await client.get(remoteFile, localFile);
-                    console.debug(`Downloaded ${fileName} from ${sourceRemotePath}`);
+                    logToFile("file-movements", `Downloaded ${fileName} from ${sourceRemotePath}`);
 
                     await client.delete(remoteFile);
-                    console.debug(`Deleted source file ${fileName} from ${sourceRemotePath}`);
+                    logToFile("file-movements", `Deleted source file ${fileName} from ${sourceRemotePath}`);
 
                     const success = await tryUploadWithRetry(client3, localFile, destRemoteFile, fileName);
 
                     if (!success) {
-                        console.error(`Failed to upload ${fileName} to client3 after multiple attempts.`);
+                        logToFile("file-movements", `Failed to upload ${fileName} to client3 after multiple attempts.`);
                         failureCache.push({ localFile, destRemoteFile, fileName });
-                        saveFailures(failureCache);
                     } else {
                         failureCache = failureCache.filter(f => f.fileName !== fileName);
-                        saveFailures(failureCache);
+                        transferredFiles.add(fileName);
 
                         logToFile(
                             "file-movements",
                             `${fileName} - ${destFolder} - ${Date.now() - startTime}ms`
                         );
-
-                        transferredFiles.add(fileName);
                     }
 
                     ping('EFR-Electron-Mover', { state: 'complete' });
-
                     currentFile = null;
                 }
             }
         }
 
         if (failureCache.length > 0) {
-            console.log(`Retrying ${failureCache.length} failed uploads from previous runs...`);
+            logToFile("file-movements", `Retrying ${failureCache.length} failed uploads from previous runs...`);
             for (const { localFile, destRemoteFile, fileName } of failureCache.slice()) {
                 currentFile = fileName;
                 ping('EFR-Electron-Mover', { state: 'run' });
@@ -156,40 +190,42 @@ export async function watchAndTransferFiles(): Promise<void> {
                 const success = await tryUploadWithRetry(client3, localFile, destRemoteFile, fileName);
                 if (success) {
                     failureCache = failureCache.filter(f => f.fileName !== fileName);
-                    saveFailures(failureCache);
+                    transferredFiles.add(fileName);
 
                     logToFile(
                         "file-movements",
                         `${fileName} - ${path.posix.dirname(destRemoteFile)} - RETRY SUCCESS`
                     );
+                    logToFile("file-movements", `Successfully retried upload for ${fileName}`);
 
-                    transferredFiles.add(fileName);
-
-                    console.log(`Successfully retried upload for ${fileName}`);
                     ping('EFR-Electron-Mover', { state: 'complete' });
                 } else {
-                    console.error(`Retry upload failed for ${fileName}`);
+                    logToFile("file-movements", `Retry upload failed for ${fileName}`);
                     ping('EFR-Electron-Mover', { state: 'fail', message: `Retry failed for ${fileName}` });
                 }
                 currentFile = null;
             }
         }
 
+        saveFailures(failureCache);
+
         await transferFilesFromClient(client1, remotePath1);
         await transferFilesFromClient(client2, remotePath2);
 
     } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);
-        console.error("File transfer error:", err);
+        logToFile("file-movements", `File transfer error: ${errorMessage}`);
 
         ping('EFR-Electron-Mover', {
             state: 'fail',
-            message: `Transfer failed${currentFile ? ` for file "${currentFile}"` : ''}: ${errorMessage}`
+            message: `Transfer failed${currentFile ? ` for file \"${currentFile}\"` : ''}: ${errorMessage}`
         });
     } finally {
         await client1.end();
         await client2.end();
         await client3.end();
         isTransferring = false;
+
+        logToFile("file-movements", `=== End transfer session ===`);
     }
 }
