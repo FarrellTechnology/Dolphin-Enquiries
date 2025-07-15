@@ -100,7 +100,7 @@ class Settings {
     return config && config.host ? config : null;
   }
 
-  async getSnowflakeConfig(): Promise<Snowflake | null> {
+  async getSnowflakeConfig(): Promise<SnowflakeConfig | null> {
     await this.initStore();
     const config = this.store!.get('snowflake');
     return config && config.account ? config : null;
@@ -138,7 +138,7 @@ class Settings {
     this.store!.set('sftpThree', config);
   }
 
-  async setSnowflakeConfig(config: Snowflake): Promise<void> {
+  async setSnowflakeConfig(config: SnowflakeConfig): Promise<void> {
     await this.initStore();
     this.store!.set('snowflake', config);
   }

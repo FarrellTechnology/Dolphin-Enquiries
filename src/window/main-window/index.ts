@@ -1,22 +1,45 @@
 import { app, BrowserWindow, nativeImage, nativeTheme } from "electron";
-import { assets } from "../../utils";
+import { assets, logToFile } from "../../utils";
 
 let mainWindow: BrowserWindow | null = null;
-let isQuitting: boolean = false;
+let quitting: boolean = false;
 
+/**
+ * Gets the current main window.
+ * 
+ * @returns {BrowserWindow | null} - The current main window or null if not created.
+ */
 export function getMainWindow(): BrowserWindow | null {
   return mainWindow;
 }
 
-export function getIsQuitting(): boolean {
-  return isQuitting;
+/**
+ * Gets the quitting status of the app.
+ * 
+ * @returns {boolean} - True if the app is quitting, false otherwise.
+ */
+export function isQuitting(): boolean {
+  return quitting;
 }
 
+/**
+ * Sets the quitting status of the app.
+ * 
+ * @param {boolean} value - The value to set for the quitting status.
+ */
 export function setIsQuitting(value: boolean): void {
-  isQuitting = value;
+  quitting = value;
 }
 
+/**
+ * Creates the main window for the application.
+ * 
+ * This function configures the main window, loads the HTML template, handles theme changes, 
+ * and manages window events like minimizing and closing.
+ */
 export function createMainWindow(): void {
+  logToFile("window", "Creating main window...");
+  
   mainWindow = new BrowserWindow({
     width: 550,
     height: 500,
@@ -31,25 +54,34 @@ export function createMainWindow(): void {
     },
   });
 
+  logToFile("window", "Main window created with configuration.");
+  
   mainWindow.loadFile(assets.template("index.html"));
+  logToFile("window", "Loaded index.html into main window.");
 
   mainWindow.once("ready-to-show", () => {
     mainWindow?.show();
+    logToFile("window", "Main window is now visible.");
     if (!app.isPackaged) mainWindow?.webContents.openDevTools({ mode: "detach" });
   });
 
   mainWindow.on("close", (event) => {
-    if (!getIsQuitting()) {
+    if (!isQuitting()) {
       event.preventDefault();
       mainWindow?.hide();
+      logToFile("window", "Window close attempted, hiding window instead.");
     }
   });
 
   mainWindow.webContents.on("did-finish-load", () => {
-    mainWindow?.webContents.send("theme-changed", nativeTheme.shouldUseDarkColors ? "dark" : "light");
+    const theme = nativeTheme.shouldUseDarkColors ? "dark" : "light";
+    mainWindow?.webContents.send("theme-changed", theme);
+    logToFile("window", `Theme changed to ${theme} after page load.`);
   });
 
   nativeTheme.on("updated", () => {
-    mainWindow?.webContents.send("theme-changed", nativeTheme.shouldUseDarkColors ? "dark" : "light");
+    const theme = nativeTheme.shouldUseDarkColors ? "dark" : "light";
+    mainWindow?.webContents.send("theme-changed", theme);
+    logToFile("window", `System theme updated to ${theme}.`);
   });
 }
