@@ -1,26 +1,21 @@
-
 import path from "path";
 import fs from "fs/promises";
 import fsSync from "fs";
 import { ping, saveParsedTravelFolder, sendEmail } from "..";
 import { getMainWindow, updateTrayTooltip } from "../../window";
-import { assets, determineReportMode, documentsFolder, getWeekDateStrings, loadEmailTemplate, runWithConcurrencyLimit } from "../../utils";
+import { assets, determineReportMode, documentsFolder, getWeekDateStrings, isWithinPastNDays, loadEmailTemplate, runWithConcurrencyLimit } from "../../utils";
 
-function isWithinPastNDays(folderName: string, days: number): boolean {
-  if (!/^\d{8}$/.test(folderName)) return false;
-
-  const year = parseInt(folderName.slice(0, 4), 10);
-  const month = parseInt(folderName.slice(4, 6), 10) - 1;
-  const day = parseInt(folderName.slice(6, 8), 10);
-
-  const folderDate = new Date(year, month, day);
-  const today = new Date();
-  const cutoff = new Date();
-  cutoff.setDate(today.getDate() - days);
-
-  return folderDate >= cutoff && folderDate <= today;
-}
-
+/**
+ * Parses the Dolphin Enquiries XML files and processes them.
+ * 
+ * This function reads all files in the specified folder, processes them in parallel (using concurrency), 
+ * and saves the parsed travel data to the database. It tracks the number of leisure and golf records 
+ * processed per file, and returns these counts per date.
+ * 
+ * @param {number} howLong - The number of past days to consider when processing files.
+ * @returns {Promise<Array<{ date: string, leisureCount: number, golfCount: number }>>} 
+ *  A promise that resolves to an array of objects containing the date and counts of leisure and golf records.
+ */
 async function parseFilesAndSendToDatabase(howLong: number): Promise<Array<{ date: string, leisureCount: number, golfCount: number }>> {
   updateTrayTooltip("Parsing Dolphin Enquiries files...");
 
@@ -81,6 +76,15 @@ async function parseFilesAndSendToDatabase(howLong: number): Promise<Array<{ dat
   return results;
 }
 
+/**
+ * Main function to check and process Dolphin Enquiries files.
+ * 
+ * This function processes files within the last `howLong` days, either parsing them for daily or weekly reports, 
+ * and then sending the report via email. It also caches daily counts for weekly reporting.
+ * 
+ * @param {number} [howLong=10] - The number of days to look back when processing files (default is 10 days).
+ * @returns {Promise<void>} Resolves when the process is complete and the report is sent.
+ */
 export async function checkDolphinFiles(howLong: number = 10): Promise<void> {
   const today = new Date();
   const dateKey = today.toISOString().slice(0, 10).replace(/-/g, "");
@@ -100,7 +104,6 @@ export async function checkDolphinFiles(howLong: number = 10): Promise<void> {
     console.error("Error saving daily counts:", err);
     todayCounts = [];
   }
-
 
   let reportCounts = todayCounts;
   let subject = `Dolphin Enquiries Report for ${dateKeyFormatted}`;

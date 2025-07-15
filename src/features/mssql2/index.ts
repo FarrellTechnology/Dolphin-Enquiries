@@ -16,6 +16,12 @@ const MAX_CHUNK_BYTES = 50 * 1024 * 1024;
 let connection: ConnectionPool | null = null;
 let config: any = null;
 
+/**
+ * Connects to the MSSQL database and returns a connection pool.
+ * 
+ * @returns {Promise<ConnectionPool>} The connection pool to the MSSQL database.
+ * @throws {Error} Throws an error if the MSSQL configuration is missing.
+ */
 export async function connect(): Promise<ConnectionPool> {
     if (connection && connection.connected) return connection;
 
@@ -27,6 +33,11 @@ export async function connect(): Promise<ConnectionPool> {
     return connection;
 }
 
+/**
+ * Retrieves all table names and schemas from the MSSQL database.
+ * 
+ * @returns {Promise<{ TABLE_SCHEMA: string; TABLE_NAME: string }[]>} A list of tables with their schema names.
+ */
 export async function getAllTables(): Promise<{ TABLE_SCHEMA: string; TABLE_NAME: string }[]> {
     const pool = await connect();
 
@@ -36,6 +47,10 @@ export async function getAllTables(): Promise<{ TABLE_SCHEMA: string; TABLE_NAME
     return result.recordset;
 }
 
+/**
+ * Class for chunking CSV data.
+ * This class is used to split large data into smaller chunks, compress, and upload them to Snowflake.
+ */
 class CsvChunker extends Transform {
     headers: string[];
     chunkBuffers: Buffer[] = [];
@@ -43,6 +58,12 @@ class CsvChunker extends Transform {
     chunksCreated: number = 0;
     onChunkReady: (chunkPath: string) => Promise<void>;
 
+    /**
+     * Creates a CsvChunker instance.
+     * 
+     * @param {string[]} headers - The headers for the CSV data.
+     * @param {(chunkPath: string) => Promise<void>} onChunkReady - Callback to be called when a chunk is ready to be uploaded.
+     */
     constructor(headers: string[], onChunkReady: (chunkPath: string) => Promise<void>) {
         super({ objectMode: true });
         this.headers = headers;
@@ -50,6 +71,13 @@ class CsvChunker extends Transform {
         this.push(headers.join(",") + "\n");
     }
 
+    /**
+     * Transforms each row of data into CSV format and manages chunking.
+     * 
+     * @param {any} row - The row of data to transform.
+     * @param {string} encoding - The encoding of the data.
+     * @param {Function} callback - The callback function to be called when the transformation is complete.
+     */
     async _transform(row: any, encoding: string, callback: Function) {
         try {
             const line = this.headers.map(h => {
@@ -73,6 +101,11 @@ class CsvChunker extends Transform {
         }
     }
 
+    /**
+     * Flushes the current chunk and prepares for the next one.
+     * 
+     * @param {Function} callback - The callback function to signal completion.
+     */
     async _flush(callback: Function) {
         try {
             if (this.chunkBuffers.length > 0) {
@@ -85,6 +118,11 @@ class CsvChunker extends Transform {
         }
     }
 
+    /**
+     * Creates a chunk file, compresses it, and returns the file path.
+     * 
+     * @returns {Promise<string>} The file path of the created and compressed chunk.
+     */
     async flushChunk(): Promise<string> {
         this.chunksCreated++;
         const chunkData = Buffer.concat(this.chunkBuffers, this.chunkSize);
@@ -101,6 +139,13 @@ class CsvChunker extends Transform {
     }
 }
 
+/**
+ * Uploads a chunk of CSV data to the Snowflake stage.
+ * 
+ * @param {Connection | null} conn - The Snowflake connection instance.
+ * @param {string} stageName - The Snowflake stage name where the file will be uploaded.
+ * @param {string} chunkPath - The path to the CSV chunk to be uploaded.
+ */
 async function uploadChunkToSnowflakeStage(conn: Connection | null, stageName: string, chunkPath: string) {
     const fileName = path.basename(chunkPath);
 
@@ -119,12 +164,27 @@ async function uploadChunkToSnowflakeStage(conn: Connection | null, stageName: s
     }
 }
 
+/**
+ * Executes a SQL command asynchronously on the Snowflake database.
+ * 
+ * @param {Connection | null} conn - The Snowflake connection instance.
+ * @param {string} sqlText - The SQL query to execute.
+ * @returns {Promise<void>} Resolves when the SQL command execution is complete.
+ */
 function executeAsync(conn: Connection | null, sqlText: string): Promise<void> {
     return new Promise((resolve, reject) => {
         conn?.execute({ sqlText, complete: (err) => (err ? reject(err) : resolve()) });
     });
 }
 
+/**
+ * Replaces a table in Snowflake with the data from the stage.
+ * 
+ * @param {Connection | null} conn - The Snowflake connection instance.
+ * @param {string} schema - The schema where the table exists in Snowflake.
+ * @param {string} tableName - The table name to be replaced in Snowflake.
+ * @param {string} stageName - The stage name from where to load the data.
+ */
 async function replaceSnowflakeTableWithStageData(conn: Connection | null, schema: string, tableName: string, stageName: string) {
     const stagingTable = `${tableName}_STAGING`;
     const stagePath = `@${stageName}/${tableName}`;
@@ -145,6 +205,15 @@ async function replaceSnowflakeTableWithStageData(conn: Connection | null, schem
     }
 }
 
+/**
+ * Ensures that the Snowflake table exists and matches the MSSQL table schema.
+ * 
+ * @param {Connection | null} conn - The Snowflake connection instance.
+ * @param {string} schema - The schema in Snowflake.
+ * @param {string} tableName - The name of the table in Snowflake.
+ * @param {Array<{ COLUMN_NAME: string, DATA_TYPE: string }>} mssqlColumns - The columns from the MSSQL table.
+ * @returns {Promise<void>} Resolves when the table exists or is created.
+ */
 export async function ensureSnowflakeTableExists(
     conn: Connection | null,
     schema: string,
@@ -177,7 +246,15 @@ export async function ensureSnowflakeTableExists(
     });
 }
 
-async function streamTableToChunks(tableName: string, stageName: string, conn: Connection | null) {
+/**
+ * Streams a MSSQL table to Snowflake in chunks.
+ * 
+ * @param {string} tableName - The name of the table to stream.
+ * @param {string} stageName - The Snowflake stage name to upload data.
+ * @param {Connection | null} conn - The Snowflake connection instance.
+ * @returns {Promise<void>} Resolves when the streaming and upload process is complete.
+ */
+async function streamTableToChunks(tableName: string, stageName: string, conn: Connection | null): Promise<void> {
     const pool = await connect();
     const request = pool.request();
     request.stream = true;
@@ -208,7 +285,12 @@ async function streamTableToChunks(tableName: string, stageName: string, conn: C
     });
 }
 
-export async function getAllDataIntoSnowflakeTwo() {
+/**
+ * Migrates data from MSSQL to Snowflake in chunks.
+ * 
+ * @returns {Promise<void>} Resolves when the migration process is complete.
+ */
+export async function getAllDataIntoSnowflakeTwo(): Promise<void> {
     try {
         const sfConnection = await initDbConnection(true);
         await executeAsync(sfConnection, `CREATE STAGE IF NOT EXISTS migration_stage`);

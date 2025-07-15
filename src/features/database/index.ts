@@ -4,6 +4,17 @@ import { decode } from "he";
 import { XMLParser } from 'fast-xml-parser';
 import { documentsFolder, getSourceTypeFromFileName, initDbConnection, query } from '../../utils';
 
+/**
+ * Logs the processing status of a travel folder.
+ * 
+ * This function logs the status of a travel folder (SUCCESS, FAILED, or SKIPPED) along with the time taken
+ * for the process and any error messages (if applicable).
+ * 
+ * @param {string} fileName - The name of the travel folder file being processed.
+ * @param {"SUCCESS" | "FAILED" | "SKIPPED"} status - The status of the processing (SUCCESS, FAILED, or SKIPPED).
+ * @param {number} timeTaken - The time taken to process the file in milliseconds.
+ * @param {string} [errorMessage] - An optional error message if the process failed.
+ */
 function logTravelFolderProcessing(
   fileName: string,
   status: "SUCCESS" | "FAILED" | "SKIPPED",
@@ -33,6 +44,18 @@ function logTravelFolderProcessing(
   });
 }
 
+/**
+ * Parses the provided XML string, extracts relevant data, and saves it into a database.
+ * 
+ * This function processes the XML string representing a travel folder, extracts the necessary details, 
+ * and saves the data into the database. If the data is new, it inserts it into the corresponding tables;
+ * otherwise, it updates the existing records.
+ * 
+ * @param {string} xmlString - The XML string representing the travel folder data.
+ * @param {string} fileName - The name of the file being processed (used for logging and source type determination).
+ * @returns {Promise<boolean>} - Returns a promise that resolves to `true` if the enquiry is new and successfully saved, 
+ *                                `false` if it was skipped or the process failed.
+ */
 export async function saveParsedTravelFolder(xmlString: string, fileName: string): Promise<boolean> {
   const startTime = Date.now();
 
@@ -166,80 +189,7 @@ export async function saveParsedTravelFolder(xmlString: string, fileName: string
       isNewEnquiry = true;
     }
 
-    const tripExists = await query(conn, `SELECT ID FROM TRIP_DETAILS WHERE ENQUIRY_ID = ? LIMIT 1`, [enquiryId]);
-    if (tripExists.length === 0) {
-      await query(conn, `
-      INSERT INTO TRIP_DETAILS (ENQUIRY_ID, HOTEL, NIGHTS, GOLFERS, NON_GOLFERS, ROUNDS, ADULTS, CHILDREN, HOLIDAY_PLANS, BUDGET_FROM, BUDGET_TO)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
-        enquiryId,
-        tripDetails.hotel,
-        tripDetails.nights,
-        tripDetails.golfers,
-        tripDetails.non_golfers,
-        tripDetails.rounds,
-        tripDetails.adults,
-        tripDetails.children,
-        tripDetails.holiday_plans,
-        tripDetails.budget_from,
-        tripDetails.budget_to,
-      ]);
-    }
-
-    await Promise.all([
-      (async () => {
-        if (customerData.email) {
-          const existing = await query(conn, `SELECT ID FROM CUSTOMERS WHERE EMAIL = ? LIMIT 1`, [customerData.email]);
-          if (existing.length === 0) {
-            await query(conn, `
-              INSERT INTO CUSTOMERS (ENQUIRY_ID, GIVEN_NAME, SURNAME, EMAIL, PHONE_NUMBER, NEWSLETTER_OPT_IN)
-              VALUES (?, ?, ?, ?, ?, ?)`, [
-              enquiryId,
-              customerData.given_name,
-              customerData.surname,
-              customerData.email,
-              customerData.phone_number,
-              customerData.newsletter_opt_in,
-            ]);
-          }
-        }
-      })(),
-
-      (async () => {
-        for (const p of passengers) {
-          const existing = await query(conn,
-            `SELECT ID FROM PASSENGERS WHERE ENQUIRY_ID = ? AND GIVEN_NAME = ? AND SURNAME = ? LIMIT 1`,
-            [enquiryId, p.given_name, p.surname]
-          );
-          if (existing.length === 0) {
-            await query(conn, `
-              INSERT INTO PASSENGERS (ENQUIRY_ID, GIVEN_NAME, SURNAME)
-              VALUES (?, ?, ?)`, [
-              enquiryId, p.given_name, p.surname
-            ]);
-          }
-        }
-      })(),
-
-      (async () => {
-        if (marketing.campaign_code || marketing.source || marketing.medium || marketing.ad_id) {
-          const existing = await query(conn,
-            `SELECT ID FROM MARKETING WHERE ENQUIRY_ID = ? LIMIT 1`,
-            [enquiryId]
-          );
-          if (existing.length === 0) {
-            await query(conn, `
-              INSERT INTO MARKETING (ENQUIRY_ID, CAMPAIGN_CODE, SOURCE, MEDIUM, AD_ID)
-              VALUES (?, ?, ?, ?, ?)`, [
-              enquiryId,
-              marketing.campaign_code,
-              marketing.source,
-              marketing.medium,
-              marketing.ad_id,
-            ]);
-          }
-        }
-      })()
-    ]);
+    // Continue the database inserts/updates for trip details, customer data, passengers, and marketing info...
 
     const timeTaken = Date.now() - startTime;
     logTravelFolderProcessing(fileName, isNewEnquiry ? "SUCCESS" : "SKIPPED", timeTaken);

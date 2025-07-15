@@ -22,6 +22,15 @@ let config: any = null;
 let isRunning = false;
 const MAX_CHUNK_SIZE_BYTES = 250 * 1024 * 1024;
 
+/**
+ * Logs the migration status for a given table.
+ * 
+ * @param {string} tableName - The name of the table being migrated.
+ * @param {"SUCCESS" | "FAILED" | "SKIPPED"} status - The status of the migration (SUCCESS, FAILED, or SKIPPED).
+ * @param {number} timeTaken - The time taken to process the table in milliseconds.
+ * @param {number} [rowsAffected] - The number of rows affected by the migration (optional).
+ * @param {string} [errorMessage] - The error message if the migration failed (optional).
+ */
 function logMigrationStatus(
     tableName: string,
     status: "SUCCESS" | "FAILED" | "SKIPPED",
@@ -43,6 +52,12 @@ function logMigrationStatus(
     logToFile("mssql", logLine);
 }
 
+/**
+ * Connects to the MSSQL database and returns the connection pool.
+ * 
+ * @returns {Promise<sql.ConnectionPool>} The MSSQL connection pool.
+ * @throws {Error} If the MSSQL configuration is missing.
+ */
 async function connect() {
     if (connection && connection.connected) {
         return connection;
@@ -55,6 +70,14 @@ async function connect() {
     return connection;
 }
 
+/**
+ * Exports a table from MSSQL to a CSV file.
+ * 
+ * @param {string} schema - The schema of the table.
+ * @param {string} tableName - The name of the table to export.
+ * @param {string} outputPath - The output path where the CSV file will be saved.
+ * @returns {Promise<void>} Resolves when the export is complete.
+ */
 async function exportTableToCSV(schema: string, tableName: string, outputPath: string) {
     const pool = await connect();
     const fullTableName = `[${schema}].[${tableName}]`;
@@ -89,6 +112,11 @@ async function exportTableToCSV(schema: string, tableName: string, outputPath: s
     });
 }
 
+/**
+ * Retrieves all table names from the database.
+ * 
+ * @returns {Promise<Array<{ TABLE_SCHEMA: string, TABLE_NAME: string }>>} A list of tables with their schemas.
+ */
 async function getAllTables() {
     const pool = await connect();
 
@@ -102,6 +130,13 @@ async function getAllTables() {
     return result.recordset;
 }
 
+/**
+ * Executes a SQL query on the Snowflake database.
+ * 
+ * @param {Connection | null} conn - The Snowflake connection instance.
+ * @param {string} sql - The SQL query to execute.
+ * @returns {Promise<number>} The number of affected rows.
+ */
 async function execSql(conn: Connection | null, sql: string): Promise<number> {
     return new Promise((resolve, reject) => {
         conn?.execute({
@@ -128,6 +163,13 @@ async function execSql(conn: Connection | null, sql: string): Promise<number> {
     });
 }
 
+/**
+ * Retrieves the column list for a given table.
+ * 
+ * @param {Connection | null} conn - The Snowflake connection instance.
+ * @param {string} tableName - The name of the table.
+ * @returns {Promise<string[]>} A list of column names for the table.
+ */
 async function getColumnList(conn: Connection | null, tableName: string): Promise<string[]> {
     return new Promise((resolve, reject) => {
         conn?.execute({
@@ -147,6 +189,13 @@ async function getColumnList(conn: Connection | null, tableName: string): Promis
     });
 }
 
+/**
+ * Checks if a table exists in the Snowflake database.
+ * 
+ * @param {Connection | null} conn - The Snowflake connection instance.
+ * @param {string} tableName - The name of the table.
+ * @returns {Promise<boolean>} True if the table exists, false otherwise.
+ */
 async function doesTableExistInSnowflake(conn: Connection | null, tableName: string): Promise<boolean> {
     const schema = 'PUBLIC';
     const name = tableName;
@@ -170,6 +219,13 @@ async function doesTableExistInSnowflake(conn: Connection | null, tableName: str
     });
 }
 
+/**
+ * Generates the SQL `CREATE TABLE` statement for a Snowflake table based on the MSSQL table schema.
+ * 
+ * @param {string} tableSchema - The schema of the MSSQL table.
+ * @param {string} tableName - The name of the MSSQL table.
+ * @returns {Promise<string>} The `CREATE TABLE` SQL statement for Snowflake.
+ */
 async function generateCreateTableSQL(tableSchema: string, tableName: string): Promise<string> {
     const pool = await connect();
 
@@ -196,6 +252,15 @@ async function generateCreateTableSQL(tableSchema: string, tableName: string): P
     return `CREATE TABLE PUBLIC.${normalize(tableName)} (\n  ${columns.join(',\n  ')}\n);`;
 }
 
+/**
+ * Splits a CSV file into smaller chunks based on file size.
+ * 
+ * @param {string} inputCsv - The input CSV file path.
+ * @param {string} outputDir - The directory to save the chunked files.
+ * @param {string} baseName - The base name for the chunked files.
+ * @param {number} maxSize - The maximum size of each chunk in bytes.
+ * @returns {Promise<void>} Resolves when the file is split into chunks.
+ */
 async function splitCsvBySizeWithHeaders(inputCsv: string, outputDir: string, baseName: string, maxSize = MAX_CHUNK_SIZE_BYTES) {
     await fs.ensureDir(outputDir);
 
@@ -238,6 +303,13 @@ async function splitCsvBySizeWithHeaders(inputCsv: string, outputDir: string, ba
     rl.close();
 }
 
+/**
+ * Fixes the columns in CSV chunks to match the expected number of columns.
+ * 
+ * @param {string} chunkDir - The directory containing the chunked CSV files.
+ * @param {number} expectedCols - The expected number of columns in the CSV files.
+ * @returns {Promise<void>} Resolves when the columns are fixed.
+ */
 async function fixCsvChunksColumns(chunkDir: string, expectedCols: number) {
     const files = await fs.readdir(chunkDir);
     for (const file of files) {
@@ -258,6 +330,14 @@ async function fixCsvChunksColumns(chunkDir: string, expectedCols: number) {
     }
 }
 
+/**
+ * Uploads all CSV chunks to the Snowflake stage.
+ * 
+ * @param {Connection | null} conn - The Snowflake connection instance.
+ * @param {string} chunkDir - The directory containing the CSV chunks.
+ * @param {string} stage - The Snowflake stage to upload the files to.
+ * @returns {Promise<void>} Resolves when all chunks are uploaded.
+ */
 async function uploadAllChunksToStage(conn: Connection | null, chunkDir: string, stage: string) {
     const files = (await fs.readdir(chunkDir))
         .filter(f => f.endsWith('.csv.gz'))
@@ -268,6 +348,14 @@ async function uploadAllChunksToStage(conn: Connection | null, chunkDir: string,
     }
 }
 
+/**
+ * Loads CSV data into a Snowflake table.
+ * 
+ * @param {Connection | null} conn - The Snowflake connection instance.
+ * @param {string} tableName - The Snowflake table name.
+ * @param {string} csvFilePath - The path to the CSV file to load.
+ * @returns {Promise<number>} The number of rows loaded into the table.
+ */
 async function loadCsvIntoTable(conn: Connection | null, tableName: string, csvFilePath: string) {
     const baseName = normalize(tableName);
     const tempTable = `${baseName}_STAGING`;
@@ -324,6 +412,15 @@ async function loadCsvIntoTable(conn: Connection | null, tableName: string, csvF
     return await execSql(conn, `SELECT COUNT(*) FROM ${baseName};`);
 }
 
+/**
+ * Uploads a single CSV chunk to the Snowflake stage, retrying on failure.
+ * 
+ * @param {Connection | null} conn - The Snowflake connection instance.
+ * @param {string} file - The file path of the CSV chunk to upload.
+ * @param {string} stage - The Snowflake stage to upload the file to.
+ * @param {number} [maxRetries=3] - The maximum number of retry attempts.
+ * @returns {Promise<void>} Resolves when the chunk is uploaded.
+ */
 async function uploadChunkWithRetry(conn: Connection | null, file: string, stage: string, maxRetries = 3) {
     const command = `PUT file://${file} ${stage} AUTO_COMPRESS=FALSE`;
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -338,6 +435,11 @@ async function uploadChunkWithRetry(conn: Connection | null, file: string, stage
     }
 }
 
+/**
+ * Main function to migrate all data from MSSQL to Snowflake.
+ * 
+ * @returns {Promise<void>} Resolves when the migration is complete.
+ */
 export async function getAllDataIntoSnowflake() {
     if (isRunning) {
         console.log('Migration is already running. Skipping this invocation.');

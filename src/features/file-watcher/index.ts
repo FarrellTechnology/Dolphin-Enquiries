@@ -7,6 +7,31 @@ let isTransferring: boolean = false;
 const failureStorePath: string = path.join(documentsFolder(), "DolphinEnquiries", "cache", "file-transfer-failures.json");
 
 /**
+ * A class representing the file paths for a given file, including remote and local paths.
+ */
+class FilePaths {
+    remoteFile: string;
+    localFile: string;
+    destFolder: string;
+    destRemoteFile: string;
+
+    /**
+     * Creates an instance of the FilePaths class.
+     * 
+     * @param {string} remoteFile - The full remote file path (combines basePath and fileName).
+     * @param {string} localFile - The local file path where the file will be saved.
+     * @param {string} destFolder - The destination folder in the upload base.
+     * @param {string} destRemoteFile - The full remote file path in the destination folder.
+     */
+    constructor(remoteFile: string, localFile: string, destFolder: string, destRemoteFile: string) {
+        this.remoteFile = remoteFile;
+        this.localFile = localFile;
+        this.destFolder = destFolder;
+        this.destRemoteFile = destRemoteFile;
+    }
+}
+
+/**
  * Loads the failed transfer cache from disk.
  * @returns {Array<{ localFile: string; destRemoteFile: string; fileName: string }>} List of failed file transfers.
  */
@@ -41,12 +66,18 @@ function saveFailures(failures: { localFile: string; destRemoteFile: string; fil
 
 /**
  * Resolves file paths based on base path, upload base, and file name.
- * @param {string} basePath - The base remote path.
- * @param {string} uploadBase - The upload base path.
- * @param {string} fileName - The name of the file.
- * @returns {Object} - Contains resolved file paths (remoteFile, localFile, destFolder, destRemoteFile).
+ * 
+ * This function returns an instance of the FilePaths class containing the resolved paths
+ * for the file's remote and local locations, as well as the destination folder and the final
+ * remote file path. It determines the destination folder based on the file's name (e.g., whether 
+ * it belongs to "egr" or "lwc").
+ * 
+ * @param {string} basePath - The base remote path (e.g., SFTP server path).
+ * @param {string} uploadBase - The base path for uploading files to the destination.
+ * @param {string} fileName - The name of the file being processed.
+ * @returns {FilePaths} - An instance of the FilePaths class containing the resolved file paths.
  */
-function resolveFilePaths(basePath: string, uploadBase: string, fileName: string) {
+function resolveFilePaths(basePath: string, uploadBase: string, fileName: string): FilePaths {
     const remoteFile = `${basePath}${fileName}`;
     const todayFolderName = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const localPath = path.join(documentsFolder(), "DolphinEnquiries", "completed", todayFolderName);
@@ -62,7 +93,9 @@ function resolveFilePaths(basePath: string, uploadBase: string, fileName: string
     if (!destFolder.endsWith('/')) destFolder += '/';
 
     const destRemoteFile = destFolder + fileName;
-    return { remoteFile, localFile, destFolder, destRemoteFile };
+
+    // Return an instance of FilePaths
+    return new FilePaths(remoteFile, localFile, destFolder, destRemoteFile);
 }
 
 /**

@@ -426,3 +426,25 @@ export async function compressCsvChunks(chunkDir: string): Promise<void> {
  * @returns {Promise<void>} - A promise that resolves after the specified delay.
  */
 export const delay = (ms: number): Promise<void> => new Promise(res => setTimeout(res, ms));
+
+/**
+ * Checks if the folder name is within the past N days.
+ * 
+ * @param {string} folderName - The folder name in YYYYMMDD format.
+ * @param {number} days - The number of days to check against.
+ * @returns {boolean} - True if the folder is within the past N days, false otherwise.
+ */
+export function isWithinPastNDays(folderName: string, days: number): boolean {
+  if (!/^\d{8}$/.test(folderName)) return false;
+
+  const year = parseInt(folderName.slice(0, 4), 10);
+  const month = parseInt(folderName.slice(4, 6), 10) - 1;
+  const day = parseInt(folderName.slice(6, 8), 10);
+
+  const folderDate = new Date(year, month, day);
+  const today = new Date();
+  const cutoff = new Date();
+  cutoff.setDate(today.getDate() - days);
+
+  return folderDate >= cutoff && folderDate <= today;
+}
