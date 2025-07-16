@@ -164,12 +164,39 @@ export async function watchAndTransferFiles(): Promise<void> {
     const transferredFiles = new Set<string>();
 
     if (isTransferring) return;
+    // Check for downloadable files before proceeding
+    async function hasDownloadableFiles(): Promise<boolean> {
+        const paths = [
+            { client: client1, path: remotePath1 },
+            { client: client2, path: remotePath2 }
+        ];
+
+        for (const { client, path: p } of paths) {
+            try {
+                const list = await client.list(p);
+                if (list.some(f => isRegularFile(f))) {
+                    return true;
+                }
+            } catch (err) {
+                logToFile("file-movements", `Error checking files in ${p}: ${err instanceof Error ? err.message : String(err)}`);
+            }
+        }
+        return false;
+    }
+
+    let failureCache = loadFailures();
+
+    if (!(await hasDownloadableFiles()) && failureCache.length === 0) {
+        await client1.end();
+        await client2.end();
+        await client3.end();
+        return;
+    }
     isTransferring = true;
 
     logToFile("file-movements", `=== Begin transfer session at ${new Date().toISOString()} ===`);
 
     let currentFile: string | null = null;
-    let failureCache = loadFailures();
 
     try {
         async function transferFilesFromClient(client: TransferClient, sourceRemotePath: string) {
