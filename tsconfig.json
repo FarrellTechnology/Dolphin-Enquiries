@@ -9,7 +9,10 @@
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "allowJs": true,  // Allows JSDoc to process JS generated from TS
+    "checkJs": true    // You can also enable this if you want JSDoc to check JS files.
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]

@@ -32,10 +32,12 @@ class FilePaths {
 }
 
 /**
- * Loads the failed transfer cache from disk.
- * @returns {Array<{ localFile: string; destRemoteFile: string; fileName: string }>} List of failed file transfers.
+ * @returns {Array.<Object>} List of failed file transfers.
+ * @property {string} localFile - The local file path.
+ * @property {string} destRemoteFile - The destination remote file path.
+ * @property {string} fileName - The name of the file.
  */
-function loadFailures(): { localFile: string; destRemoteFile: string; fileName: string }[] {
+export function loadFailures(): { localFile: string; destRemoteFile: string; fileName: string }[] {
     try {
         if (fs.existsSync(failureStorePath)) {
             const content = fs.readFileSync(failureStorePath, 'utf-8');
@@ -50,9 +52,12 @@ function loadFailures(): { localFile: string; destRemoteFile: string; fileName: 
 
 /**
  * Saves the failed transfer cache to disk.
- * @param {Array<{ localFile: string; destRemoteFile: string; fileName: string }>} failures - List of failed file transfers to save.
+ * @param {Array.<Object>} failures - List of failed file transfers to save.
+ * @property {string} failures.localFile - The local file path.
+ * @property {string} failures.destRemoteFile - The remote destination file path.
+ * @property {string} failures.fileName - The name of the file.
  */
-function saveFailures(failures: { localFile: string; destRemoteFile: string; fileName: string }[]): void {
+export function saveFailures(failures: { localFile: string; destRemoteFile: string; fileName: string }[]): void {
     try {
         const dir = path.dirname(failureStorePath);
         if (!fs.existsSync(dir)) {
@@ -77,11 +82,11 @@ function saveFailures(failures: { localFile: string; destRemoteFile: string; fil
  * @param {string} fileName - The name of the file being processed.
  * @returns {FilePaths} - An instance of the FilePaths class containing the resolved file paths.
  */
-function resolveFilePaths(basePath: string, uploadBase: string, fileName: string): FilePaths {
-    const remoteFile = `${basePath}${fileName}`;
+export function resolveFilePaths(basePath: string, uploadBase: string, fileName: string): FilePaths {
+    const remoteFile = path.posix.join(basePath, fileName);
     const todayFolderName = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const localPath = path.join(documentsFolder(), "DolphinEnquiries", "completed", todayFolderName);
-    const localFile = path.join(localPath, fileName);
+    const localPath = path.posix.join(documentsFolder(), "DolphinEnquiries", "completed", todayFolderName);
+    const localFile = path.posix.join(localPath, fileName);
     let destFolder = uploadBase;
 
     if (fileName.toLowerCase().startsWith('egr')) {
@@ -90,11 +95,8 @@ function resolveFilePaths(basePath: string, uploadBase: string, fileName: string
         destFolder = path.posix.join(destFolder, 'XML-LWC/');
     }
 
-    if (!destFolder.endsWith('/')) destFolder += '/';
+    const destRemoteFile = path.posix.join(destFolder, fileName);
 
-    const destRemoteFile = destFolder + fileName;
-
-    // Return an instance of FilePaths
     return new FilePaths(remoteFile, localFile, destFolder, destRemoteFile);
 }
 
@@ -107,7 +109,7 @@ function resolveFilePaths(basePath: string, uploadBase: string, fileName: string
  * @param {number} [maxRetries=3] - The maximum number of retry attempts.
  * @returns {Promise<boolean>} - Returns true if the upload succeeds, false otherwise.
  */
-async function tryUploadWithRetry(client: TransferClient, localFile: string, destRemoteFile: string, fileName: string, maxRetries: number = 3): Promise<boolean> {
+export async function tryUploadWithRetry(client: TransferClient, localFile: string, destRemoteFile: string, fileName: string, maxRetries: number = 3): Promise<boolean> {
     let attempts = 0;
     while (attempts < maxRetries) {
         try {
@@ -187,16 +189,20 @@ export async function watchAndTransferFiles(): Promise<void> {
                     const startTime = Date.now();
 
                     await client.get(remoteFile, localFile);
-                    logToFile("file-movements", `Downloaded ${fileName} from ${sourceRemotePath}`);
+                    if (fs.existsSync(localFile)) {
+                        logToFile("file-movements", `Downloaded ${fileName} from ${sourceRemotePath}`);
+                    } else {
+                        logToFile("file-movements", `Failed to download ${fileName} from ${sourceRemotePath}`);
+                    }
 
                     await client.delete(remoteFile);
                     logToFile("file-movements", `Deleted source file ${fileName} from ${sourceRemotePath}`);
 
                     const success = await tryUploadWithRetry(client3, localFile, destRemoteFile, fileName);
-
                     if (!success) {
                         logToFile("file-movements", `Failed to upload ${fileName} to client3 after multiple attempts.`);
                         failureCache.push({ localFile, destRemoteFile, fileName });
+                        ping('EFR-Electron-Mover', { state: 'fail' });
                     } else {
                         failureCache = failureCache.filter(f => f.fileName !== fileName);
                         transferredFiles.add(fileName);
@@ -205,9 +211,10 @@ export async function watchAndTransferFiles(): Promise<void> {
                             "file-movements",
                             `${fileName} - ${destFolder} - ${Date.now() - startTime}ms`
                         );
+                        
+                        ping('EFR-Electron-Mover', { state: 'complete' });
                     }
 
-                    ping('EFR-Electron-Mover', { state: 'complete' });
                     currentFile = null;
                 }
             }

@@ -1,0 +1,33 @@
+{
+    "source": {
+        "include": [
+            "dist/main.js",
+            "dist/features/auto-launch/index.js",
+            "dist/features/cronitor/index.js",
+            "dist/features/database/index.js",
+            "dist/features/dolphin-enquiries/index.js",
+            "dist/features/file-watcher/index.js",
+            "dist/features/mssql/index.js",
+            "dist/features/mssql2/index.js",
+            "dist/features/scheduler/index.js",
+            "dist/features/updater/index.js",
+            "dist/window/main-window/index.js",
+            "dist/window/tray/index.js",
+            "dist/window/settings/index.js",
+            "dist/utils/index.js",
+            "dist/utils/logger.js",
+            "dist/utils/safeRelaunch.js",
+            "dist/utils/settings.js",
+            "dist/utils/snowflake.js",
+            "dist/utils/transfer-files.js",
+            "dist/assets/js/preload.js"
+        ],
+        "exclude": [
+            "node_modules"
+        ]
+    },
+    "opts": {
+        "destination": "./docs",
+        "recurse": true
+    }
+}

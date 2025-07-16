@@ -58,9 +58,9 @@ export class TransferClient {
      * Checks if the provided client is an instance of SFTPClient.
      * 
      * @param {SFTPClient | FTPClient} client - The client to check.
-     * @returns {client is SFTPClient} - True if the client is an instance of SFTPClient.
+     * @returns {boolean} - True if the client is an instance of SFTPClient.
      */
-    private isSFTPClient(client: SFTPClient | FTPClient): client is SFTPClient {
+    private isSFTPClient(client: SFTPClient | FTPClient): boolean {
         return (client as SFTPClient).list !== undefined;
     }
 
@@ -68,9 +68,9 @@ export class TransferClient {
      * Checks if the provided client is an instance of FTPClient.
      * 
      * @param {SFTPClient | FTPClient} client - The client to check.
-     * @returns {client is FTPClient} - True if the client is an instance of FTPClient.
+     * @returns {boolean} - True if the client is an instance of FTPClient.
      */
-    private isFTPClient(client: SFTPClient | FTPClient): client is FTPClient {
+    private isFTPClient(client: SFTPClient | FTPClient): boolean {
         return (client as FTPClient).access !== undefined;
     }
 
@@ -113,7 +113,8 @@ export class TransferClient {
      * Executes a function with retry logic.
      * 
      * @template T
-     * @param {() => Promise<T>} fn - The function to execute.
+     * @param {Function} fn - The function to execute.
+     * @returns {Promise.<T>} - The promise resolving to the result of executing the function.
      * @param {RetryOptions} options - The options for retries.
      * @returns {Promise<T>} - The result of the function execution.
      * @throws {Error} - If the function fails after maxRetries attempts.
@@ -144,7 +145,7 @@ export class TransferClient {
      * 
      * @template T
      * @param {string} label - The label for the operation being timed.
-     * @param {() => Promise<T>} fn - The function to execute.
+     * @param {Function} fn - The function to execute.
      * @returns {Promise<T>} - The result of the function execution.
      */
     private async timeLog<T>(label: string, fn: () => Promise<T>): Promise<T> {
@@ -197,7 +198,7 @@ export class TransferClient {
      * @param {number} [retryDelayMs=2000] - The delay in milliseconds between retry attempts.
      * @returns {Promise<void>} - Resolves when the connection is successful.
      */
-    async connect(maxRetries = 3, retryDelayMs = 2000): Promise<void> {
+    async connect(maxRetries: number = 3, retryDelayMs: number = 2000): Promise<void> {
         const client = this.isSFTP
             ? await this.withRetries(() => this.createSFTPClient(), { label: 'SFTP connect', maxRetries, retryDelayMs })
             : await this.withRetries(() => this.createFTPClient(), { label: 'FTP connect', maxRetries, retryDelayMs });
@@ -218,130 +219,62 @@ export class TransferClient {
      * @returns {Promise<UnifiedFileInfo[]>} - A promise that resolves to a list of UnifiedFileInfo objects.
      */
     async list(remotePath: string): Promise<UnifiedFileInfo[]> {
-        return this.timeLog(`Listing files in ${remotePath}`, async () => {
-            const client = this.getClient();
-
-            if (this.isSFTPClient(client)) {
-                return this.withRetries(async () => {
-                    const sftpList = await client.list(remotePath);
-                    this.log(`Listed ${sftpList.length} files in ${remotePath}`);
-                    return sftpList.map(item => ({
-                        name: item.name,
-                        type: item.type === 'd' ? 'directory' : item.type === 'l' ? 'symbolicLink' : 'file',
-                        size: item.size
-                    }));
-                }, { label: `SFTP list(${remotePath})` });
-            } else if (this.isFTPClient(client)) {
-                await this.ftpClient?.cd(remotePath);
-                return this.withRetries(async () => {
-                    const ftpList = await this.ftpClient?.list() || [];
-                    this.log(`Listed ${ftpList.length} files in ${remotePath}`);
-                    return ftpList.map(item => ({
-                        name: item.name,
-                        type: item.isDirectory ? 'directory' : 'file',
-                        size: item.size,
-                        rawModifiedAt: item.rawModifiedAt,
-                        isDirectory: item.isDirectory,
-                        isSymbolicLink: item.isSymbolicLink,
-                        isFile: item.isFile,
-                    }));
-                }, { label: `FTP list(${remotePath})` });
-            }
-            throw new Error('Invalid client type');
-        });
-    }
-
-    /**
-     * Performs a file operation (get, put, or delete).
-     * 
-     * @param {'get' | 'put' | 'delete'} action - The action to perform ('get', 'put', or 'delete').
-     * @param {string} remoteFile - The remote file path.
-     * @param {string} [localFile] - The local file path (required for 'get' and 'put' actions).
-     * @returns {Promise<void>} - Resolves when the file operation is completed.
-     * @throws {Error} - If localFile is not provided for 'get' or 'put' actions.
-     */
-    private async fileOperation(action: 'get' | 'put' | 'delete', remoteFile: string, localFile?: string): Promise<void> {
-        if ((action === 'get' || action === 'put') && !localFile) {
-            throw new Error('localFile is required for get and put operations');
-        }
+        this.log(`Listing files in ${remotePath}`);
 
         const client = this.getClient();
 
-        const operations: {
-            get: (remoteFile: string, localFile: string) => Promise<void>;
-            put: (remoteFile: string, localFile: string) => Promise<void>;
-            delete: (remoteFile: string) => Promise<void>;
-        } = {
-            get: this.isSFTPClient(client)
-                ? async (remoteFile: string, localFile: string) => {
-                    await (client as SFTPClient).get(remoteFile, localFile);
-                    this.log(`Successfully retrieved file: ${remoteFile} to ${localFile}`);
-                }
-                : async (remoteFile: string, localFile: string) => {
-                    await (this.ftpClient as FTPClient).downloadTo(localFile, remoteFile);
-                    this.log(`Successfully retrieved file: ${remoteFile} to ${localFile}`);
-                },
-            put: this.isSFTPClient(client)
-                ? async (remoteFile: string, localFile: string) => {
-                    await (client as SFTPClient).put(localFile, remoteFile);
-                    this.log(`Successfully uploaded file: ${localFile} to ${remoteFile}`);
-                }
-                : async (remoteFile: string, localFile: string) => {
-                    await (this.ftpClient as FTPClient).uploadFrom(localFile, remoteFile);
-                    this.log(`Successfully uploaded file: ${localFile} to ${remoteFile}`);
-                },
-            delete: this.isSFTPClient(client)
-                ? async (remoteFile: string) => {
-                    await (client as SFTPClient).delete(remoteFile);
-                    this.log(`Successfully deleted file: ${remoteFile}`);
-                }
-                : async (remoteFile: string) => {
-                    await (this.ftpClient as FTPClient).remove(remoteFile);
-                    this.log(`Successfully deleted file: ${remoteFile}`);
-                },
-        };
-
-        const operation = operations[action];
-
-        if (!operation) {
-            throw new Error(`Invalid action '${action}' for ${this.isSFTP ? 'SFTP' : 'FTP'} client`);
+        if (this.isSFTPClient(client)) {
+            return this.withRetries(async () => {
+                const sftpList = await client.list(remotePath);
+                return sftpList.map(item => ({
+                    name: item.name,
+                    type: item.type === 'd' ? 'directory' : item.type === 'l' ? 'symbolicLink' : 'file',
+                    size: item.size,
+                }));
+            }, { label: `SFTP list(${remotePath})` });
+        } else if (this.isFTPClient(client)) {
+            await this.ftpClient?.cd(remotePath);
+            return this.withRetries(async () => {
+                const ftpList = await this.ftpClient?.list() || [];
+                return ftpList.map(item => ({
+                    name: item.name,
+                    type: item.isDirectory ? 'directory' : 'file',
+                    size: item.size,
+                }));
+            }, { label: `FTP list(${remotePath})` });
         }
 
-        await this.timeLog(`${action} ${remoteFile}`, async () => {
-            await operation(remoteFile, localFile!);  // SFTP and FTP operations
-        });
+        return [];
     }
 
-    /**
-     * Retrieves a file from the remote server.
-     * 
-     * @param {string} remoteFile - The remote file path.
-     * @param {string} localFile - The local file path to save the file.
-     * @returns {Promise<void>} - Resolves when the file has been retrieved.
-     */
     async get(remoteFile: string, localFile: string): Promise<void> {
-        await this.fileOperation('get', remoteFile, localFile);
+        this.log(`Downloading file from ${remoteFile} to ${localFile}`);
+        const client = this.getClient();
+        if (this.isSFTPClient(client)) {
+            await (client as SFTPClient).get(remoteFile, localFile);
+        } else if (this.isFTPClient(client)) {
+            await this.ftpClient?.downloadTo(localFile, remoteFile);
+        }
     }
 
-    /**
-     * Uploads a file to the remote server.
-     * 
-     * @param {string} localFile - The local file path.
-     * @param {string} remoteFile - The remote file path.
-     * @returns {Promise<void>} - Resolves when the file has been uploaded.
-     */
     async put(localFile: string, remoteFile: string): Promise<void> {
-        await this.fileOperation('put', remoteFile, localFile);
+        this.log(`Uploading file from ${localFile} to ${remoteFile}`);
+        const client = this.getClient();
+        if (this.isSFTPClient(client)) {
+            await (client as SFTPClient).put(localFile, remoteFile);
+        } else if (this.isFTPClient(client)) {
+            await this.ftpClient?.uploadFrom(localFile, remoteFile);
+        }
     }
 
-    /**
-     * Deletes a file from the remote server.
-     * 
-     * @param {string} remoteFile - The remote file path.
-     * @returns {Promise<void>} - Resolves when the file has been deleted.
-     */
     async delete(remoteFile: string): Promise<void> {
-        await this.fileOperation('delete', remoteFile);
+        this.log(`Deleting file: ${remoteFile}`);
+        const client = this.getClient();
+        if (this.isSFTPClient(client)) {
+            await (client as SFTPClient).delete(remoteFile);
+        } else if (this.isFTPClient(client)) {
+            await this.ftpClient?.remove(remoteFile);
+        }
     }
 
     /**
