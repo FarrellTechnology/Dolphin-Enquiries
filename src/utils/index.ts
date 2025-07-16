@@ -37,10 +37,10 @@ export function documentsFolder(): string {
 /**
  * An object holding functions to resolve paths to different asset types (template, image, js).
  */
-export const assets: { 
-  template: (...segments: string[]) => string, 
-  image: (...segments: string[]) => string, 
-  js: (...segments: string[]) => string 
+export const assets: {
+  template: (...segments: string[]) => string,
+  image: (...segments: string[]) => string,
+  js: (...segments: string[]) => string
 } = {
   template: (...segments: string[]) => resolveAppPath("templates", ...segments),
   image: (...segments: string[]) => resolveAppPath("images", ...segments),
@@ -180,12 +180,12 @@ export async function loadEmailTemplate(
  */
 export function isRegularFile(file: UnifiedFileInfo): boolean {
   if (typeof file.type === 'string') {
-    return file.type === '-';
+    return file.type === 'file';
   }
 
   if (typeof file.type === 'number') {
-    const hasExtension = path.extname(file.name).length > 0;
-    return file.type === 0 || hasExtension;
+    // Fallback: if we get numeric type, assume 0 = file (like from fs.Dirent)
+    return file.type === 0 || path.extname(file.name).length > 0;
   }
 
   return false;
