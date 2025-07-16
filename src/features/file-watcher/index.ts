@@ -174,10 +174,17 @@ export async function watchAndTransferFiles(): Promise<void> {
     try {
         async function transferFilesFromClient(client: TransferClient, sourceRemotePath: string) {
             const fileList = await client.list(sourceRemotePath);
+            logToFile("file-movements", `Found ${fileList.length} files in ${sourceRemotePath} from ${client.toString()}`);
 
             for (const file of fileList) {
                 const fileName = file.name;
                 const isFile = isRegularFile(file);
+
+                if (!isFile) {
+                    logToFile("file-movements", `Skipping ${file.name} - not a regular file, type: ${file.type}`);
+                } else if (transferredFiles.has(file.name)) {
+                    logToFile("file-movements", `Skipping ${file.name} - already transferred`);
+                }
 
                 if (isFile && !transferredFiles.has(fileName)) {
                     currentFile = fileName;
@@ -191,12 +198,13 @@ export async function watchAndTransferFiles(): Promise<void> {
                     await client.get(remoteFile, localFile);
                     if (fs.existsSync(localFile)) {
                         logToFile("file-movements", `Downloaded ${fileName} from ${sourceRemotePath}`);
-                    } else {
-                        logToFile("file-movements", `Failed to download ${fileName} from ${sourceRemotePath}`);
-                    }
 
-                    await client.delete(remoteFile);
-                    logToFile("file-movements", `Deleted source file ${fileName} from ${sourceRemotePath}`);
+                        await client.delete(remoteFile);
+                        logToFile("file-movements", `Deleted source file ${fileName} from ${sourceRemotePath}`);
+                    } else {
+                        logToFile("file-movements", `Failed to download ${fileName} from ${sourceRemotePath}. Skipping deletion.`);
+                        continue;
+                    }
 
                     const success = await tryUploadWithRetry(client3, localFile, destRemoteFile, fileName);
                     if (!success) {
@@ -211,7 +219,7 @@ export async function watchAndTransferFiles(): Promise<void> {
                             "file-movements",
                             `${fileName} - ${destFolder} - ${Date.now() - startTime}ms`
                         );
-                        
+
                         ping('EFR-Electron-Mover', { state: 'complete' });
                     }
 
