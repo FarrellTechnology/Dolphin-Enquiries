@@ -36,7 +36,9 @@ export async function connect(): Promise<ConnectionPool> {
 /**
  * Retrieves all table names and schemas from the MSSQL database.
  * 
- * @returns {Promise<{ TABLE_SCHEMA: string; TABLE_NAME: string }[]>} A list of tables with their schema names.
+ * @returns {Promise.<Array.<Object>>} A list of tables with their schema names.
+ * @property {string} TABLE_SCHEMA - The schema of the table.
+ * @property {string} TABLE_NAME - The name of the table.
  */
 export async function getAllTables(): Promise<{ TABLE_SCHEMA: string; TABLE_NAME: string }[]> {
     const pool = await connect();
@@ -62,7 +64,7 @@ class CsvChunker extends Transform {
      * Creates a CsvChunker instance.
      * 
      * @param {string[]} headers - The headers for the CSV data.
-     * @param {(chunkPath: string) => Promise<void>} onChunkReady - Callback to be called when a chunk is ready to be uploaded.
+     * @param {Function} onChunkReady - Callback to be called when a chunk is ready to be uploaded.
      */
     constructor(headers: string[], onChunkReady: (chunkPath: string) => Promise<void>) {
         super({ objectMode: true });

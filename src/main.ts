@@ -7,6 +7,8 @@ import { setupSafeRelaunch } from "./utils";
  * This function is executed when the app is ready and sets up the various components for the application.
  * It enables auto-launch, sets up auto-updating, creates the main window, and sets up tray functionality.
  * Additionally, it schedules tasks for periodic actions such as checking dolphin files and transferring files.
+ * 
+ * @returns {Promise<void>} Resolves when the app is fully initialized and tasks are scheduled.
  */
 app.whenReady().then(async () => {
   // Enable auto-launch for the app when the system starts
@@ -49,6 +51,7 @@ app.whenReady().then(async () => {
  * that run in the background (e.g., tray apps).
  * 
  * @param {Object} e - The event object.
+ * @param {Function} e.preventDefault - Prevents the app from quitting when windows are closed.
  */
 app.on("window-all-closed", (e: { preventDefault: () => void; }) => {
   e.preventDefault();  // Prevent default quit behavior
