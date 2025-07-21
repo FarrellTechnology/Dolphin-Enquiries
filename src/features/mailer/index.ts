@@ -2,24 +2,17 @@ import nodemailer from "nodemailer";
 import { settings } from "../../utils/settings";
 import { assets } from "../../utils";
 
+
 /**
- * Sends an email using the SMTP configuration from settings.
- * 
- * This function uses the `nodemailer` library to send an email. It retrieves the SMTP configuration 
- * from the application's settings, constructs the email, and sends it with the specified subject, 
- * plain text, and HTML content. The email includes an attachment (the logo image) which is embedded 
- * within the HTML content using a CID (Content-ID) reference.
- * 
- * @param {string} subject - The subject line of the email.
- * @param {string} [text] - The plain text content of the email (optional).
- * @param {string} [html] - The HTML content of the email (optional). If provided, any occurrences of `{{logo}}` 
- *                          will be replaced with an embedded image.
- * 
- * @throws {Error} Throws an error if the SMTP settings are not configured.
- * 
- * @returns {Promise<void>} A promise that resolves when the email has been successfully sent.
+ * Sends an email using the configured SMTP settings.
+ * @param {string | undefined} to Recipient email address. If not provided, the default recipient from the settings will be used.
+ * @param {string} subject Email subject line.
+ * @param {string} [text] Plain text content of the email.
+ * @param {string} [html] HTML content of the email. If provided, the `{{logo}}` placeholder will be replaced with an embedded image of the logo.
+ * @returns {Promise<void>} Resolves when the email has been sent.
+ * @throws {Error} If SMTP settings are not configured.
  */
-export async function sendEmail(subject: string, text?: string, html?: string): Promise<void> {
+export async function sendEmail(to: string | undefined, subject: string, text?: string, html?: string): Promise<void> {
   const config = await settings.getSMTPConfig();
 
   // Check if SMTP settings are available
@@ -53,7 +46,7 @@ export async function sendEmail(subject: string, text?: string, html?: string): 
   // Send the email
   const info = await transporter.sendMail({
     from: `"Dolphin Enquiries" <${config.user}>`, // Sender address
-    to: config.to, // Recipient address
+    to: to ?? config.to, // Recipient address
     subject, // Subject line
     text, // Plain text content (optional)
     html: updatedHtml, // HTML content with embedded logo (optional)

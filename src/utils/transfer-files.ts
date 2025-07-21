@@ -287,16 +287,16 @@ export class TransferClient {
             const client = this.getClient();
             if (this.isSFTPClient(client)) {
                 await this.sftpClient?.end();
+                this.log(`Closed connection to ${this.toString()}`);
                 this.sftpClient = null;
-                this.log(`Closed SFTP connection`);
             } else if (this.isFTPClient(client)) {
                 await this.ftpClient?.close();
+                this.log(`Closed connection to ${this.toString()}`);
                 this.ftpClient = null;
-                this.log(`Closed FTP connection`);
             }
         } catch (err) {
             const errorMsg = err instanceof Error ? err.message : String(err);
-            this.log(`Error while closing connection: ${errorMsg}`);
+            this.log(`Error while closing ${this.toString()}: ${errorMsg}`);
         }
     }
 
