@@ -154,5 +154,5 @@ export async function checkDolphinFiles(howLong: number = 10): Promise<void> {
   const mode = determineReportMode(reportCounts);
   const html = await loadEmailTemplate(reportCounts, totalLeisure, totalGolf, mode);
 
-  await sendEmail(subject, undefined, html);
+  await sendEmail(undefined, subject, undefined, html);
 }

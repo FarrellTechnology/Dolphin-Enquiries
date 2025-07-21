@@ -1,5 +1,6 @@
 import { app, BrowserWindow } from "electron";
 import { logToFile } from ".";
+import { sendEmail } from "../features";
 
 const MAX_ATTEMPTS = 3;
 const RELAUNCH_DELAY_MS = 3000;
@@ -39,8 +40,19 @@ function logEvent(level: "info" | "warn" | "error", message: string, extraInfo: 
  * @param {string} reason - The reason for the error.
  * @returns {boolean} - Returns true if the error is recoverable, otherwise false.
  */
-function isKnownRecoverableError(reason: string): boolean {
-    return reason.includes("net::ERR_NAME_NOT_RESOLVED") || reason.includes("getConnection");
+function isKnownRecoverableError(reason: any): boolean {
+    const reasonStr =
+        typeof reason === "string"
+            ? reason
+            : reason instanceof Error
+                ? reason.message
+                : JSON.stringify(reason);
+
+    return (
+        reasonStr.includes("net::ERR_NAME_NOT_RESOLVED") ||
+        reasonStr.includes("getConnection") ||
+        reasonStr.includes("Timed out while waiting for handshake")
+    );
 }
 
 /**
@@ -48,7 +60,7 @@ function isKnownRecoverableError(reason: string): boolean {
  * 
  * @param {string} reason - The reason for triggering the relaunch.
  */
-function relaunchApp(reason: string): void {
+async function relaunchApp(reason: string): Promise<void> {
     logEvent("info", `Attempting to relaunch due to: ${reason}`, { attempt: relaunchAttempts + 1 });
 
     if (isKnownRecoverableError(reason)) {
@@ -66,6 +78,22 @@ function relaunchApp(reason: string): void {
     if (relaunchAttempts > MAX_ATTEMPTS) {
         logEvent("error", "Max relaunch attempts exceeded. App will NOT restart.", { reason });
         return;
+    }
+
+    try {
+        await sendEmail(
+            "it@efrtravel.com",
+            "⚠️ Dolphin Tray Relaunch Triggered",
+            `The Dolphin Enquiries Tray app attempted to relaunch.\nReason: ${reason}\nAttempt: ${relaunchAttempts}`,
+            `
+                <p><strong>Dolphin Tray has triggered a relaunch.</strong></p>
+                <p><strong>Reason:</strong> ${reason}</p>
+                <p><strong>Attempt:</strong> ${relaunchAttempts}</p>
+                <p>This message was generated automatically. {{logo}}</p>
+            `
+        );
+    } catch (emailErr) {
+        logEvent("error", "Failed to send relaunch email", { emailErr });
     }
 
     setTimeout(() => {
@@ -117,9 +145,12 @@ export function setupSafeRelaunch(mainWindow: BrowserWindow | null): void {
     });
 
     process.on("unhandledRejection", (reason: any) => {
-        const msg = `Unhandled Promise Rejection: ${reason?.stack || reason}`;
+        const msg = `Unhandled Promise Rejection: ${typeof reason === "object" ? JSON.stringify(reason, null, 2) : reason
+            }`;
         logEvent("error", msg, { reason });
-        relaunchApp("Unhandled promise rejection in main process");
-        process.exit(1);
+        relaunchApp(msg);
+        if (!isKnownRecoverableError(reason)) {
+            process.exit(1);
+        }
     });
 }
