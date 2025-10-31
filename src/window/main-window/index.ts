@@ -40,7 +40,10 @@ export function setIsQuitting(value: boolean): void {
 export function createMainWindow(): void {
   logToFile("window", "Creating main window...");
 
+  const version = app.getVersion();
+
   mainWindow = new BrowserWindow({
+    title: `Dolphin Enquiries - v${version}`,
     width: 550,
     height: 500,
     show: false,

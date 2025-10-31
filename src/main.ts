@@ -79,14 +79,8 @@ app.on("before-quit", () => {
   console.log("App quitting gracefully...");
 });
 
-/**
- * Prevents the default behavior of the "window-all-closed" event when the app's window is closed.
- * This ensures that the app does not quit when all windows are closed, typically useful in apps
- * that run in the background (e.g., tray apps).
- * 
- * @param {Object} e - The event object.
- * @param {Function} e.preventDefault - Prevents the app from quitting when windows are closed.
- */
-app.on("window-all-closed", (e: { preventDefault: () => void; }) => {
-  e.preventDefault();  // Prevent default quit behavior
+
+app.on("window-all-closed", () => {
+  console.log("All windows closed — keeping background service alive.");
+  // No quit here — app remains running in tray.
 });
