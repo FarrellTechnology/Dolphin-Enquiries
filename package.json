@@ -1,6 +1,6 @@
 {
     "name": "dolphin-enquiries-tray",
-    "version": "1.0.120",
+    "version": "1.0.121",
     "main": "dist/main.js",
     "description": "A simple Electron app to send email notifications for Dolphin Enquiries.",
     "author": {
@@ -64,7 +64,7 @@
         "@types/nodemailer": "^6.4.17",
         "@types/ssh2-sftp-client": "^9.0.4",
         "@types/uuid": "^10.0.0",
-        "electron": "^30.0.0",
+        "electron": "^38.5.0",
         "electron-builder": "^26.0.12",
         "jest": "^30.0.4",
         "jsdoc": "^4.0.4",
