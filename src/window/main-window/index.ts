@@ -39,14 +39,14 @@ export function setIsQuitting(value: boolean): void {
  */
 export function createMainWindow(): void {
   logToFile("window", "Creating main window...");
-  
+
   mainWindow = new BrowserWindow({
     width: 550,
     height: 500,
     show: false,
     resizable: true,
     icon: nativeImage.createFromPath(
-      assets.image(nativeTheme.shouldUseDarkColors ? "company-icon.png" : "company-icon-dark.png")
+      assets.image(nativeTheme.shouldUseDarkColors ? "company-icon-light.png" : "company-icon-dark.png")
     ),
     webPreferences: {
       contextIsolation: true,
@@ -55,7 +55,7 @@ export function createMainWindow(): void {
   });
 
   logToFile("window", "Main window created with configuration.");
-  
+
   mainWindow.loadFile(assets.template("index.html"));
   logToFile("window", "Loaded index.html into main window.");
 
