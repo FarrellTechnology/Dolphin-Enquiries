@@ -140,11 +140,6 @@ export function setupSafeRelaunch(mainWindow: BrowserWindow | null): void {
         relaunchApp("Renderer window became unresponsive");
     });
 
-    mainWindow.webContents.on("crashed", () => {
-        logEvent("error", "WebContents crashed", { windowId: mainWindow.id });
-        relaunchApp("WebContents crashed");
-    });
-
     app.on("child-process-gone", (_event, details) => {
         if (details.type === "GPU") {
             const reason = `GPU process crash. Reason: ${details.reason}, Exit Code: ${details.exitCode}`;
