@@ -1,6 +1,6 @@
 {
     "name": "dolphin-enquiries-tray",
-    "version": "1.0.119",
+    "version": "1.0.120",
     "main": "dist/main.js",
     "description": "A simple Electron app to send email notifications for Dolphin Enquiries.",
     "author": {
@@ -12,6 +12,7 @@
         "generate-docs": "npx jsdoc dist/**/*.js --destination docs -v",
         "start": "tsc && electron .",
         "build": "rimraf out && rimraf dist && tsc && electron-builder",
+        "postinstall": "electron-builder install-app-deps",
         "tsc": "tsc",
         "test": "jest"
     },
@@ -52,6 +53,7 @@
         }
     },
     "devDependencies": {
+        "@electron/rebuild": "^4.0.1",
         "@types/auto-launch": "^5.0.5",
         "@types/electron-store": "^1.3.1",
         "@types/he": "^1.2.3",
@@ -62,10 +64,11 @@
         "@types/nodemailer": "^6.4.17",
         "@types/ssh2-sftp-client": "^9.0.4",
         "@types/uuid": "^10.0.0",
-        "electron": "^39.0.0",
+        "electron": "^30.0.0",
         "electron-builder": "^26.0.12",
         "jest": "^30.0.4",
         "jsdoc": "^4.0.4",
+        "node-abi": "^4.17.0",
         "rimraf": "^6.0.1",
         "ts-jest": "^29.4.0",
         "typescript": "^5.8.3"
